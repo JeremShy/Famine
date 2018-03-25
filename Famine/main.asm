@@ -16,6 +16,7 @@ extrn printf:proc
 .data
 hello db 'Hello 64-bit world!',0ah,0
 print_decimal db 'open : %d',0ah,0
+print_ptr db 'ptr : %p',0ah,0
 
 ; rbp
 ; 40-48 : alignment
@@ -24,13 +25,9 @@ print_decimal db 'open : %d',0ah,0
 ; rsp 
 
 .code
-signature proc
-	db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
-signature endp
 
-find_start_famine proc
-
-find_start_famine endp
+label_signature:
+db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
 
 main proc
 		push rbp
@@ -41,7 +38,7 @@ main proc
 
 		mov [rsp + 32], rcx
 
-		lea rcx, signature
+		mov rcx, label_signature
 		call puts
 
 		mov rcx, [rsp + 32]
@@ -53,10 +50,16 @@ main proc
 		mov rdx, rax
 		call printf
 
+		lea rcx, print_ptr
+		mov rdx, label_signature
+		call printf
+
+
 		mov rax, 0
 		mov rsp, rbp
 		pop rbp
 		ret
-
 main endp
+
+label_fin:
 end
