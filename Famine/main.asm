@@ -18,6 +18,7 @@ extrn FindNextFileA:proc
 extrn memset:proc
 extrn strncat:proc
 extrn strncpy:proc
+extrn OpenFile:proc
 
 .code
 label_debut:
@@ -29,6 +30,31 @@ print_ptr db 'ptr : %p',0ah,0
 TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 
+; rbp
+; 32 - 168		: ofstruct
+; 00 - 32		: shadow
+; rsp
+
+open_file proc ; char *file_path - return fd or 0
+	push rbp
+	mov rbp, rsp
+	sub rsp, 168
+	
+	lea rdx, [rsp + 32]
+	mov r8, 2
+	call OpenFile
+
+	cmp eax, -1
+	je ret_failure
+
+	jmp	ret_success
+ret_failure:
+	mov	rax, 0
+ret_success:
+	mov rsp, rbp
+	pop rbp
+	ret
+open_file endp
 
 ; rbp
 ; 400-528	: path + file name
