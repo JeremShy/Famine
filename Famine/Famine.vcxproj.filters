@@ -18,8 +18,5 @@
     <MASM Include="main.asm">
       <Filter>Source Files</Filter>
     </MASM>
-    <MASM Include="debug.asm">
-      <Filter>Source Files</Filter>
-    </MASM>
   </ItemGroup>
 </Project>
