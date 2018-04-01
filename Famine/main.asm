@@ -18,7 +18,9 @@ extrn FindNextFileA:proc
 extrn memset:proc
 extrn strncat:proc
 extrn strncpy:proc
-extrn OpenFile:proc
+extrn ReadFile:proc
+extrn CreateFileA:proc
+extrn print_last_error:proc
 
 .code
 label_debut:
@@ -31,26 +33,54 @@ TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 
 ; rbp
-; 32 - 168		: ofstruct
+; 202 - 206		: number_of_bytes_read
+; 200 - 202		:  Buffer
+; 64 - 200		: ofstruct
+; 32 - 64		: params
 ; 00 - 32		: shadow
 ; rsp
 
 open_file proc ; char *file_path - return fd or 0
 	push rbp
 	mov rbp, rsp
-	sub rsp, 168
+	sub rsp, 320
 	
-	lea rdx, [rsp + 32]
+	xor rax, rax
+
+	push rcx
+	push 0
+	call puts
+	pop rcx
+	pop rcx
+
+	mov rdx, 0C0000000h ; Desired Access
+	mov r8, 0 ; Share permission
+	mov r9, 0 ; NULL
+	mov rax, 3
+	mov [rsp + 32], rax ; Open only if exists
+	mov rax, 80h
+	mov [rsp + 36], rax ; flag normal
+	mov rax, 0
+	mov [rsp + 40], rax ; no attribute template
+	call CreateFileA
+
+	cmp rax, -1
+	je ret_ret
+
+	mov r12, rax
+
+	mov rcx, r12
+	lea rdx, [rsp + 200]
 	mov r8, 2
-	call OpenFile
+	lea r9, [rsp + 202]
+	push 0
+	push 0
+	call ReadFile
+	add rsp, 16
 
-	cmp eax, -1
-	je ret_failure
-
-	jmp	ret_success
-ret_failure:
-	mov	rax, 0
-ret_success:
+ret_ret:
+	call print_last_error
+	mov rax, r12
 	mov rsp, rbp
 	pop rbp
 	ret
@@ -97,7 +127,8 @@ loop_start:
 		mov r8, 128
 		call strncat
 
-
+		lea rcx, [rsp + 400]
+		call open_file
 
 		lea rcx, [rsp + 400]
 		call puts
