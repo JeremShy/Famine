@@ -100,7 +100,7 @@ stop:
 		xor rax, rax
 		mov rsp, rbp
 		pop rbp
-		ret
+		ret 
 main endp
 fin_main:
 
