@@ -100,7 +100,7 @@ stop:
 		xor rax, rax
 		mov rsp, rbp
 		pop rbp
-		ret 
+		ret
 main endp
 fin_main:
 
@@ -429,6 +429,5 @@ loop_end:
 		pop rbp
 		ret
 infect_folder endp
-
 label_fin:
 end
