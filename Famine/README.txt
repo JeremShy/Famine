@@ -17,8 +17,6 @@ On ajoute la valeur de l'offset de jump : 6CCE + 7934A = 80018
 Ca appartient a idata : On tranforme ca en addresse physique en soustrayant la Virtual Address et en ajoutant le pointer to raw data : 80018 - 80000 + 7C200 = 7C218
 7C218 est donc l'addresse de la FT.
 
-
-
 label debut:
 Notre code
 label fin:
@@ -31,7 +29,7 @@ Est ce que la dll est dans le fichier
 
 	Si oui, est ce que la fonction qu'on va utiliser est importee
 		si oui, on trouve l'adresse a ecrire
-		Si non, on cree une entree dans la OFT,une entree dans la FT, un nom et un hint dans le tableau et tout ce qui faut.. on recypere la bonne addresse
+		Si non, on cree une entree dans la OFT,une entree dans la FT, un nom et un hint dans le tableau et tout ce qui faut.. on recupere la bonne addresse
 	On ecrit la bonne adresse au bon endroit
 
 extrn puts:proc  
@@ -44,9 +42,8 @@ extrn CreateFileA:proc		; Kernel32.dll
 extrn GetFileSize:proc		; Kernel32.dll
 extrn SetFilePointer:proc	; Kernel32.dll
 extrn WriteFile:proc		; Kernel32.dll
-
-extrn GetProcessHeap:proc	; 
-extrn HeapAlloc:proc
+extrn GetProcessHeap:proc	; Kernel32.dll
+extrn HeapAlloc:proc		; Kernel32.dll
 
 Parcourir les sections pour trouver idata
 

