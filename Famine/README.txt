@@ -12,14 +12,10 @@ Il faut donc :
 	Il faudra aussi jumper vers l'endroit de la ft (en dereferencant)
 
 
-
-807a0
-
-72f6 + 794AA
-
-7ef6 + 794AA = 813a0
-
-813a0 - 81000 + 7d400 = 7d7a0
+Adresse du jump a travers les sections : 60CE - On transforme ca en virtual address : 60CE - 400 + 1000 = 6cce.
+On ajoute la valeur de l'offset de jump : 6CCE + 7934A = 80018
+Ca appartient a idata : On tranforme ca en addresse physique en soustrayant la Virtual Address et en ajoutant le pointer to raw data : 80018 - 80000 + 7C200 = 7C218
+7C218 est donc l'addresse de la FT.
 
 
 
@@ -48,3 +44,6 @@ extrn CreateFileA:proc		; Kernel32.dll
 extrn GetFileSize:proc		; Kernel32.dll
 extrn SetFilePointer:proc	; Kernel32.dll
 extrn WriteFile:proc		; Kernel32.dll
+
+extrn GetProcessHeap:proc	; 
+extrn HeapAlloc:proc
