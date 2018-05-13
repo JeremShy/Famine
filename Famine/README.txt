@@ -47,3 +47,26 @@ extrn WriteFile:proc		; Kernel32.dll
 
 extrn GetProcessHeap:proc	; 
 extrn HeapAlloc:proc
+
+Parcourir les sections pour trouver idata
+
+Trouver le data directory : "PE\0\0" + 0x88
+Trouver le champ ImportDirectoryRva : datad directory + 8
+Transformer la valeur en addresse physique 
+
+FFEC113B
+
+00007FF66F536014
+	
+
+13EEC5
+
+
+offset : 10614 - Address : 00007FF66F536014
+offset : 53B -	Address :  00007FF66F52113B
+
+debut main - (VA de famine + entrypoint) (Par exemple : 00007FF66F536000 - 26000 + 1113B)
+
+100D9
+
+Begin Entrypoint : 1513b

