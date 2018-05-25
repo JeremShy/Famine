@@ -67,3 +67,8 @@ debut main - (VA de famine + entrypoint) (Par exemple : 00007FF66F536000 - 26000
 100D9
 
 Begin Entrypoint : 1513b
+
+Tuto kilebien : http://win32assembly.programminghorizon.com/pe-tut6.html
+
+
+00007FF6338C67BB
