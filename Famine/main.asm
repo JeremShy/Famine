@@ -678,7 +678,8 @@ debut_boucle_init_imports_find_kernel32:
 fin_boucle_init_imports_find_kernel32:
 
 	mov rax, qword ptr [rsp + 48]
-	sub rax, 0ch
+	sub rax, 0ch; rax = ddresse de l'import
+
 	xor rbx, rbx
 	mov ebx, dword ptr [rax]
 	sub rbx, qword ptr [rsp + 64]
@@ -690,6 +691,14 @@ fin_boucle_init_imports_find_kernel32:
 	sub rcx, qword ptr [rsp + 64]
 	add rcx, qword ptr [rsp + 56]
 	add rcx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+
+	add rax, 10h; rax  = addresse de la rva de
+	mov eax, dword ptr [rax]
+	sub rax, qword ptr [rsp + 64]
+	add rax, qword ptr [rsp + 56]
+	add rax, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+	
+	mov qword ptr [rsp + 72], rax ; on sauvegarde l'adresse de la ft
 
 grande_boucle_init_imports:
 	add rcx, 2
@@ -712,11 +721,26 @@ grande_boucle_init_imports_fin:
 
 debut_boucle_oft_trouver_fin: ; RBX doit etre l'adresse de la premiere entree de l'oft
 	cmp dword ptr [rbx], 0
-	je fin_boucle_oft_trouver_oft
+	je fin_boucle_oft_trouver_fin
 	add rbx, 8
 	jmp debut_boucle_oft_trouver_fin
-fin_boucle_oft_trouver_oft:
+fin_boucle_oft_trouver_fin:
 
+	mov rax, qword ptr [rsp + 72]
+debut_boucle_ft_trouver_fin: ; RAX doit etre l'adresse de la premiere entree de la ft
+	cmp dword ptr [rax], 0
+	je fin_boucle_ft_trouver_fin
+	add rax, 8
+	jmp debut_boucle_ft_trouver_fin
+fin_boucle_ft_trouver_fin:
+
+	lea r8, COUNT
+
+	; rbx = fin oft
+	; rax = fin ft
+	; rdx = fin tableau_noms
+	; r8 = count
+	
 	
 	mov rsp, rbp
 	pop rbp
