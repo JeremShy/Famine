@@ -11,6 +11,11 @@ Il faut donc :
 	Rajouter chaque fonction dans la oft et la ft de la dll qui lui correspond, et aussi son nom et un hint pourri (genre 0000) dans le tableau IMAGE_IMPORT_BY_NAME. En esperant qu'il y a de la place dans ces 3 tableaux.
 	Il faudra aussi jumper vers l'endroit de la ft (en dereferencant)
 
+label_jump_create_file - label_debut = offset d'ou on part
+offset + RVA de .FAMINE = RVA d'ou on part
+RVA ou on veut arriver = offset dans idata + RVA de idata
+
+Parametre du jump = RVA_FIN - RVA DEBUT
 
 Adresse du jump a travers les sections : 60CE - On transforme ca en virtual address : 60CE - 400 + 1000 = 6cce.
 On ajoute la valeur de l'offset de jump : 6CCE + 7934A = 80018
