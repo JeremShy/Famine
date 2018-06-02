@@ -213,6 +213,9 @@ not_nt_read_file:
 		call ReadFile
 end_read_file:
 
+
+	
+
 	test rax, rax
 	je ret_failure
 
@@ -825,7 +828,7 @@ init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 
 	mov rcx, rax
 	mov rdx, qword ptr [rsp + 40]
-	call get_idata_values
+	call search_section
 
 	mov [rsp + 56], rdx
 	mov [rsp + 64], rcx
@@ -961,12 +964,51 @@ fin_boucle_remplir_la_ft:
 
 init_imports endp
 
+search_section proc
+	push rbp
+	push rbx
+	mov rbp, rsp
+	xor rbx, rbx
+
+	add	rcx, 8ch
+	xor rbx, rbx
+	mov ebx, dword ptr [rcx]
+
+	sub rcx, 8ch
+	mov rax, rcx
+	add rax, 10h
+	xor rdx, rdx
+	mov dx, word ptr [rax]
+	add rax, rdx
+	add rax, 4
+
+debut_boucle:
+	mov edx, dword ptr [rax + 8]
+	mov ecx, dword ptr [rax + 12] ; exz = VirtualAddress = debut section
+	add edx, ecx; edx = VIrtualAddress + VirtualSize = fin section
+	cmp ebx, ecx
+	jl fin_boucle
+	cmp ebx, edx
+	jg fin_boucle
+	mov edx, dword ptr [rax + 20]
+	jmp ret_func
+fin_boucle:
+	add rax, 28h
+	jmp debut_boucle 
+ret_func:
+	mov rsp, rbp
+	pop rbx
+	pop rbp
+	ret
+search_section endp
+
 get_idata_values proc ; get_idata_values(void *file_header, int taille_du_fichier). Retourne VirtualAddress dans rcx, et PointerToRawData dans rdx
 	push rbp
 	push rbx
 	mov rbp, rsp
 	sub rsp, 32
 
+	call search_section
 	; sections = file header + sizeof(file_header) + SizeOfOptionalHeader
 	mov rax, rcx
 	add rax, 10h
