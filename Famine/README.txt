@@ -64,6 +64,10 @@ FFEC113B
 13EEC5
 
 
+
+.FAMINE
+2E
+
 offset : 10614 - Address : 00007FF66F536014
 offset : 53B -	Address :  00007FF66F52113B
 
@@ -77,3 +81,7 @@ Tuto kilebien : http://win32assembly.programminghorizon.com/pe-tut6.html
 
 
 00007FF6338C67BB
+
+
+000001ac93a4c9d0
+0x000001AC93A81DE8

