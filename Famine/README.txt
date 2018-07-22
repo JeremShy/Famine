@@ -1,5 +1,19 @@
 Bonjour, nous du futur. J'espere que tout va bien. <3
 
+push rbp
+push lesvariables
+mov rbp, rsp
+sub rsp, ...
+
+.
+.
+.
+
+mov rsp, rbp
+pop lesvariablesalenvers
+pop rbp
+ret
+
 
 Du coup :
 
