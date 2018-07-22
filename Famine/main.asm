@@ -430,9 +430,9 @@ ret_failure:
 handle_file endp
 
 ; rbp
-; 70 - 80		: padding
+; 70 - 72		: padding
 ; 66 - 70		: number_of_bytes_read
-; 64 - 66		:  Buffer
+; 64 - 66		: Buffer
 ; 32 - 64		: params
 ; 00 - 32		: shadow
 ; rsp
@@ -440,10 +440,12 @@ handle_file endp
 open_file proc ; char *file_path - return fd or 0
 	push rbp
 	mov rbp, rsp
-	sub rsp, 80
+	push r12
+	sub rsp, 72
 	
 	xor rax, rax
 
+	; first parameter already in rcx
 	mov rdx, 0C0000000h ; Desired Access
 	mov r8, 0 ; Share permission
 	mov r9, 0 ; NULL
@@ -473,7 +475,7 @@ end_create_file:
 	mov r8, 2
 	lea r9, [rsp + 66]
 	mov rax, 0
-	mov [rsp + 32], rax ; Open only if exists
+	mov [rsp + 32], rax
 
 	test BYTE ptr [MUST_EXIT], 1
 	jne	not_nt_read_file
@@ -491,6 +493,7 @@ ret_error:
 	mov r12, -1
 ret_ok:
 	mov rax, r12
+	pop r12
 	mov rsp, rbp
 	pop rbp
 	ret
